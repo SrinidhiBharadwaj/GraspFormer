@@ -80,4 +80,4 @@ if __name__ == "__main__":
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                          std=[0.229, 0.224, 0.225])
     ocid_dataset = OCIDDataset(ocid_path, image_set, transform=normalize)
-    ocid_dataset.__getitem__(1)
+    ocid_dataset.__getitem__(11)
