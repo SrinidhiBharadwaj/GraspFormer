@@ -120,10 +120,10 @@ if __name__ == "__main__":
     #Image to tensor conversion is made implicit inside the class
     dataset = CornellDataset(dataset_path, img_set, transform=normalize)
     print(len(dataset))
-    img, gt_class_bbox = dataset.__getitem__(291)
+    img, gt_class_bbox = dataset.__getitem__(11)
     bbox = (gt_class_bbox[1]).numpy()
     print(f"bbox: {bbox}")
-    img = np.transpose(img,(1,2,0)).numpy().astype(np.uint8).copy() 
-    cv2.rectangle(img, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0, 0, 255), 2)
-    cv2.imwrite("DatasetCheck.png", img)
+    # img = np.transpose(img,(1,2,0)).numpy().astype(np.uint8).copy() 
+    # cv2.rectangle(img, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0, 0, 255), 2)
+    # cv2.imwrite("DatasetCheck.png", img)
     
