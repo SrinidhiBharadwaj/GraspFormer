@@ -41,7 +41,24 @@ class Keymodel(nn.Module):
         encoder = self.fc_encoder(encoder.reshape(bs,64,-1))
         return encoder
 
-
+class Decoder_head(nn.Module):
+    '''
+    shared linear layer used to decode the transform embeddings
+    '''
+    def __init__(self,input_dim,num_of_class,num_point) -> None:
+        super().__init__()
+        self.fc1 = nn.Linear(input_dim,64)
+        self.fc2 = nn.Linear(64,16)
+        self.bound = nn.Linear(16,num_point)
+        self.classification = nn.Linear(16,num_of_class)
+        self.relu  = nn.Relu()
+    
+    def forward(self,x):
+        x = self.relu(self.fc1(x))
+        x = self.relu(self.fc2(x))
+        bound = self.bound(x)
+        classification = self.classification(x)
+        return (classification,bound)
 
 class DETR(nn.Module):
     '''
@@ -66,72 +83,17 @@ class DETR(nn.Module):
         
         self.decoder = decoder
         if self.decoder is None:
-            self.decoder = DetrDecoder()   
+            self.decoder = DetrDecoder(number_of_embed=16,
+                embed_dim=128,
+                nhead = 32,
+                numlayers = 3) 
+            self.head = Decoder_head(input_dim=128,num_of_class=2,num_point=4)
     
     def forward(self,img):
         encoder_out = self.encoder(img)
         encoder_key = self.key_model(encoder_out)
-        return self.decoder(encoder_key)
-
-
-class detr_simplified(nn.Module):
-    def __init__(self, num_classes, embed_dim=128, nhead=8,
-                    num_encoders=6, num_decoders=6):
-        
-        super(detr_simplified, self).__init__()
-        self.num_classes = num_classes
-        self.hidden_dim = embed_dim
-        self.nheads = 8
-        self.rot_classes = 20 #Set for cornell dataset
-
-        resnet_model = torchvision.models.resnet50(pretrained=True)
-        self.encoder=torch.nn.Sequential(*(list(resnet_model.children())[:-2]))
-
-        for params in self.encoder.parameters():
-            params.requires_grad = False #Do not train the encoder
-        
-        self.conv1 = nn.Conv2d(2048, self.hidden_dim, kernel_size=1)
-
-        self.transformer = nn.Transformer(d_model=self.hidden_dim, nhead=self.nheads, num_encoder_layers=num_encoders, \
-                                          num_decoder_layers=num_decoders)
-        
-        self.row_pos_embed = nn.Parameter(torch.rand(50, self.hidden_dim // 2))
-        self.col_pos_embed = nn.Parameter(torch.rand(50, self.hidden_dim // 2))
-        self.query_pos_embed = nn.Parameter(torch.rand(100, self.hidden_dim))
-
-        #Prediction heads (Might have to add one more for orientation or increase 4 to 5)
-        self.linear_bbox = nn.Linear(self.hidden_dim, 4)
-
-        #Orientation head using pretrained vgg16 module
-        vgg_16_model = torchvision.models.vgg16(pretrained=True)
-        self.orientation_head = nn.Sequential(*(list(vgg_16_model.features._modules.values())[:]))
-        self.orientation_classifier = nn.Sequential(*(list(vgg_16_model.classifier._modules.values())[:-1]))
-        self.linear_angle = nn.Linear(4096, self.rot_classes)
-
-    def forward(self, x, orientation_only=False):
-        original_tensor = x
-        bbox = None
-        if not orientation_only:
-            x = self.encoder(x)
-            x = self.conv1(x)
-            #Positional embeddings
-            _, _, height, width = x.size()
-            embedding = torch.cat([self.col_embed[:width].unsqueeze(0).repeat(height, 1, 1),
-                self.row_embed[:height].unsqueeze(1).repeat(1, width, 1)], dim=-1).flatten(0, 1).unsqueeze(1)
-            print(embedding.shape)
-            x = self.transformer(embedding + 0.1 * x.flatten(2).permute(2, 0, 1),
-                                self.query_pos_embed.unsqueeze(1)).transpose(0, 1)
-            bbox = self.linear_bbox(x)
-        
-        #print(original_tensor.size())
-        rotation = self.orientation_head(original_tensor)
-        rotation = rotation.view(rotation.size(0), -1)
-        #print(rotation.size())
-        rotation = self.orientation_classifier(rotation)
-        #print(rotation.size())
-        rotation = self.linear_angle(rotation)
-        
-        return bbox, rotation
+        decoder_out = self.decoder(encoder_key)
+        return self.head(decoder_out)
 
 
 
