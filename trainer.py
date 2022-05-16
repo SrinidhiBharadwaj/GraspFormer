@@ -4,7 +4,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from torchvision import transforms
 import torch.optim as optim
-from model import GraspFormer, detr_simplified
+from model import  DETR
 from cornell_dataset import CornellDataset
 import os
 
@@ -34,8 +34,9 @@ class Trainer():
                 class_label = y[0].long().to(self.device)
                 bbox_label = y[1].float().to(self.device)
                 
-                bbox_pred, class_pred = self.model(x, orientation_only)
-
+                bbox_pred, class_pred = self.model(x)
+                print(bbox_pred.size(),class_pred.size())
+                exit()
                 if not orientation_only:
                     #Needs to be filled with loss for bbox matching(matching loss)
                     pass
@@ -95,7 +96,7 @@ if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Model will be trained on {device}!!")
 
-    model = detr_simplified(num_classes=20).to(device) #19 + 1 background class for Cornell Dataset
+    model = DETR().to(device) #19 + 1 background class for Cornell Dataset
 
     #Rotation parameters
     loss_rot = nn.CrossEntropyLoss()

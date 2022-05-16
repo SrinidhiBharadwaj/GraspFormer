@@ -22,7 +22,6 @@ class DetrDecoder(nn.Module):
     def forward(self,encoder_out):
         bs = encoder_out.size(0)
         decoder_out = self.decoder(self.query.weight.unsqueeze(0).repeat(bs, 1, 1),encoder_out)
-        decoder_out = self.fc1(decoder_out)
         return decoder_out
 
 class Keymodel(nn.Module):
@@ -31,6 +30,7 @@ class Keymodel(nn.Module):
     decoder embedding dims
     '''
     def __init__(self):
+        super(Keymodel,self).__init__()
         self.conv_1 = nn.Conv2d(2048,512,1)
         self.conv_2 = nn.Conv2d(512,64,1)
         self.fc_encoder = nn.Linear(49,128)
@@ -46,25 +46,27 @@ class Decoder_head(nn.Module):
     shared linear layer used to decode the transform embeddings
     '''
     def __init__(self,input_dim,num_of_class,num_point) -> None:
-        super().__init__()
+        super(Decoder_head,self).__init__()
         self.fc1 = nn.Linear(input_dim,64)
         self.fc2 = nn.Linear(64,16)
         self.bound = nn.Linear(16,num_point)
         self.classification = nn.Linear(16,num_of_class)
-        self.relu  = nn.Relu()
+        self.relu  = nn.ReLU()
     
     def forward(self,x):
         x = self.relu(self.fc1(x))
         x = self.relu(self.fc2(x))
         bound = self.bound(x)
         classification = self.classification(x)
-        return (classification,bound)
+        return (bound,classification)
 
 class DETR(nn.Module):
     '''
     model class for detr class
     '''
-    def __init__(self,encoder=None,key_model=None,decoder=None):
+    def __init__(self,encoder=None,key_model=None,decoder=None,
+                num_class=20,num_point=4,embed_dim=128,nhead=32,
+                numlayers=3,number_of_embed=16):
         '''
         inputs:
             encoder_pre_model :encoder pretrained model 
@@ -83,11 +85,11 @@ class DETR(nn.Module):
         
         self.decoder = decoder
         if self.decoder is None:
-            self.decoder = DetrDecoder(number_of_embed=16,
-                embed_dim=128,
-                nhead = 32,
-                numlayers = 3) 
-            self.head = Decoder_head(input_dim=128,num_of_class=2,num_point=4)
+            self.decoder = DetrDecoder(number_of_embed=number_of_embed,
+                embed_dim=embed_dim,
+                nhead = nhead,
+                numlayers = numlayers) 
+            self.head = Decoder_head(input_dim=embed_dim,num_of_class=num_class,num_point=num_point)
     
     def forward(self,img):
         encoder_out = self.encoder(img)
