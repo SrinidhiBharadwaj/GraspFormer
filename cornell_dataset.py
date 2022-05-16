@@ -9,22 +9,24 @@ import os
 
 
 class CornellDataset(Dataset):
-    def __init__(self, path, images, transform):
+    def __init__(self, path, images_set, transform):
         super(CornellDataset, self).__init__()
         self.dataset_path = path
-        self.imgset = images
+        self.imgset = images_set
         self.transform = transforms.Compose([transforms.ToTensor(), transform]) 
         self.classes = ('__background__',
                          'bin_01', 'bin_02', 'bin_03', 'bin_04', 'bin_05',
                          'bin_06', 'bin_07', 'bin_08', 'bin_09', 'bin_10',
                          'bin_11', 'bin_12', 'bin_13', 'bin_14', 'bin_15',
                          'bin_16', 'bin_17', 'bin_18', 'bin_19')
+        self.empty_list = []
         self.num_classes = len(self.classes)
         self.class_to_ind = dict(zip(self.classes, range(self.num_classes)))
         self.height = 224
         self.width = 224
         rect_dataset = self.fetch_gt_rect()
         self.rect_dataset_bbox = rect_dataset[0]
+    
 
     def __len__(self):
         return len(self.rect_dataset_bbox) 
@@ -35,12 +37,14 @@ class CornellDataset(Dataset):
         image_path = self.get_image_path(self.img_idx[index])
         img = io.imread(image_path)
         img = self.transform(img)
-
+        #print(img.size())
         gt_img_rect = self.rect_dataset_bbox[index]
         gt_img_class = gt_img_rect[0]
         gt_img_box = gt_img_rect[1]
         
+        gt_img_class = np.sort(gt_img_class)
         #If the image has only one class
+        #print(gt_img_class.size)
         if (gt_img_class.size == 1):
             gt_class = gt_img_class[0]
             gt_bbox = gt_img_box[0]
@@ -77,28 +81,33 @@ class CornellDataset(Dataset):
         file = os.path.join(self.dataset_path, "Annotations", index+".txt")
         #print(index, file)
         #print(f"Reading from {file}")
-        with open(file) as f:
-            file_content = f.readlines()
-        
-        #Storing bounding box coordinartes and class information
-        gt_rect = np.zeros((len(file_content), 4), dtype=np.uint8)
-        gt_class = np.zeros((len(file_content)), dtype=np.int32)
 
-        #Loop through the data (line) and store
-        i = 0
-        for line in file_content:
-            #Data is of format [class, x1, y1, x2, y2]
-            line_content = line.split()
+        if (os.stat(file).st_size) == 0:
+            self.empty_list.append(index)
+            #print('Empty files: {}'.format(file))
+        else:
+            with open(file) as f:
+                file_content = f.readlines()
             
-            gt_class[i] = int(line_content[0])
-            x1 = float(line_content[1])
-            x2 = float(line_content[3])
-            y1 = float(line_content[2])
-            y2 = float(line_content[4])
+            #Storing bounding box coordinartes and class information
+            gt_rect = np.zeros((len(file_content), 4), dtype=np.uint8)
+            gt_class = np.zeros((len(file_content)), dtype=np.int32)
 
-            gt_rect[i, : ] = [x1, y1, x2, y2]
+            #Loop through the data (line) and store
+            i = 0
+            for line in file_content:
+                #Data is of format [class, x1, y1, x2, y2]
+                line_content = line.split()
+                
+                gt_class[i] = int(line_content[0])
+                x1 = float(line_content[1])
+                x2 = float(line_content[3])
+                y1 = float(line_content[2])
+                y2 = float(line_content[4])
 
-        return gt_class, gt_rect
+                gt_rect[i, : ] = [x1, y1, x2, y2]
+
+            return gt_class, gt_rect
 
     def fetch_gt_rect(self):
         self.img_idx = self.get_img_idx()
@@ -107,7 +116,12 @@ class CornellDataset(Dataset):
         for idx in range(data_len):
             #Each index has a tuple gt_rect[idx][0] = class and [1] = box coordinates
             gt_rect.append(self.get_coordinates(self.img_idx[idx]))
-            
+
+        for idx in self.empty_list:
+            self.img_idx.remove(idx)
+        for i in range(gt_rect.count(None)):
+            gt_rect.remove(None)
+
         gt_rect_dataset = [gt_rect, self.img_idx]
         return gt_rect_dataset
 
