@@ -34,7 +34,8 @@ class HungarianMatcher():
         idx = self.get_index(target_dic,output_dic)
         bound_loss = self.bound_loss(output_dic['bbox'][np.arange(batch_size),idx],target_dic['bbox'].to(torch.float))
         class_label = torch.ones(batch_size,num_queries).to(output_dic['bbox'].device)
-        class_label[idx] = 0
+       
+        class_label[torch.arange(batch_size),idx] = 0
         class_loss = self.class_loss(output_dic['class'].permute(0,2,1),class_label.to(torch.long))
         return class_loss + bound_loss
         
