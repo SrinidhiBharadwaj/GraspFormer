@@ -6,6 +6,7 @@ from torchvision import transforms
 import torch.optim as optim
 from model import GraspFormer, detr_simplified
 from cornell_dataset import CornellDataset
+from hungarian import HungarianMatcher
 import os
 
 class Trainer():
@@ -28,6 +29,7 @@ class Trainer():
         print(f"Number of training images: {len(self.train_loader)}")
         for epoch in range(self.epochs):
             running_orientation_loss = 0
+            running_bbox_loss = 0
             for t, (x, y) in enumerate(self.train_loader):
                 x = x.to(self.device)
 
@@ -38,7 +40,14 @@ class Trainer():
 
                 if not orientation_only:
                     #Needs to be filled with loss for bbox matching(matching loss)
-                    pass
+                    #Learn orientation model weights regardless
+                    target_dic = {'bbox':bbox_label}
+                    output_dic = {'bbox':bbox_pred,'class':class_pred}
+                    loss = self.loss_bbox(target_dic,output_dic)
+                    self.optimizer_bbox.zero_grad()
+                    loss.backward()
+                    self.optimizer_bbox.step()
+                    running_bbox_loss += loss.item()
 
                 #Learn orientation model weights regardless
                 orientation_loss = self.loss_rot(class_pred, class_label)
@@ -59,8 +68,9 @@ class Trainer():
                     loss_rot_val = self.loss_rot(class_pred_val, y_val)
                     running_loss_val += loss_rot_val.item()
                 
-                print(f"Epoch: {epoch}, Training loss: {orientation_loss/len(self.train_loader)}, \
-                                Validation Loss: {running_loss_val/len(self.val_loader)}")
+                print(f"Epoch: {epoch}, Training loss: {orientation_loss/len(self.train_loader)}, Validation Loss: {running_loss_val/len(self.val_loader)}")
+
+                print(f"Epoch: {epoch}, loss: {running_bbox_loss/len(self.train_loader)}")
 
 
             #print(f"Epoch: {epoch}/{self.epochs} --> Orientation_loss: {running_orientation_loss/len(self.train_loader)} \
@@ -103,16 +113,18 @@ if __name__ == "__main__":
     optim_rot = optim.SGD(model.parameters(), lr=lr_orientation, momentum=0.9)
 
     #bbox parameters
-    loss_bbox = None
-    lr_bbox = 1e-2
+    weight = torch.tensor([1,0.1]).to(device)
+
+    loss_bbox = HungarianMatcher(weight,num_class=2)
+    lr_bbox = 1e-3
     optim_bbox = optim.Adam(model.parameters(), lr=lr_bbox)
 
     epochs = 30
 
-    train_model = Trainer(model, train_loader, val_loader, device, optim_bbox, loss_bbox, 
+    train_model = Trainer(model, train_loader, val_loader, device, optim_bbox, loss_bbox.loss, 
                             optim_rot, loss_rot, epochs)
 
-    train_model.train_network(orientation_only=True)
+    train_model.train_network(orientation_only=False)
 
 
 

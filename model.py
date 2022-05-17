@@ -75,17 +75,17 @@ class DETR(nn.Module):
 
 
 class detr_simplified(nn.Module):
-    def __init__(self, num_classes, embed_dim=128, nhead=8,
+    def __init__(self, num_classes, embed_dim=256, nhead=8,
                     num_encoders=6, num_decoders=6):
         
         super(detr_simplified, self).__init__()
         self.num_classes = num_classes
         self.hidden_dim = embed_dim
-        self.nheads = 8
+        self.nheads = nhead
         self.rot_classes = 20 #Set for cornell dataset
 
-        resnet_model = torchvision.models.resnet50(pretrained=True)
-        self.encoder=torch.nn.Sequential(*(list(resnet_model.children())[:-2]))
+        self.encoder = torchvision.models.resnet50(pretrained=True)
+        del self.encoder.fc
 
         for params in self.encoder.parameters():
             params.requires_grad = False #Do not train the encoder
@@ -101,36 +101,43 @@ class detr_simplified(nn.Module):
 
         #Prediction heads (Might have to add one more for orientation or increase 4 to 5)
         self.linear_bbox = nn.Linear(self.hidden_dim, 4)
-
+        self.linear_class = nn.Linear(self.hidden_dim, num_classes+1)
         #Orientation head using pretrained vgg16 module
-        vgg_16_model = torchvision.models.vgg16(pretrained=True)
-        self.orientation_head = nn.Sequential(*(list(vgg_16_model.features._modules.values())[:]))
-        self.orientation_classifier = nn.Sequential(*(list(vgg_16_model.classifier._modules.values())[:-1]))
-        self.linear_angle = nn.Linear(4096, self.rot_classes)
+        # vgg_16_model = torchvision.models.vgg16(pretrained=True)
+        # self.orientation_head = nn.Sequential(*(list(vgg_16_model.features._modules.values())[:]))
+        # self.orientation_classifier = nn.Sequential(*(list(vgg_16_model.classifier._modules.values())[:-1]))
+        # self.linear_angle = nn.Linear(4096, self.rot_classes)
 
     def forward(self, x, orientation_only=False):
         original_tensor = x
         bbox = None
         if not orientation_only:
-            x = self.encoder(x)
+            x = self.encoder.conv1(x)
+            x = self.encoder.bn1(x)
+            x = self.encoder.relu(x)
+            x = self.encoder.maxpool(x)
+
+            x = self.encoder.layer1(x)
+            x = self.encoder.layer2(x)
+            x = self.encoder.layer3(x)
+            x = self.encoder.layer4(x)
+
             x = self.conv1(x)
+    
             #Positional embeddings
-            _, _, height, width = x.size()
-            embedding = torch.cat([self.col_embed[:width].unsqueeze(0).repeat(height, 1, 1),
-                self.row_embed[:height].unsqueeze(1).repeat(1, width, 1)], dim=-1).flatten(0, 1).unsqueeze(1)
-            print(embedding.shape)
+            height, width = x.shape[-2:]
+            embedding = torch.cat([self.col_pos_embed[:width].unsqueeze(0).repeat(height, 1, 1),
+                self.row_pos_embed[:height].unsqueeze(1).repeat(1, width, 1)], dim=-1).flatten(0, 1).unsqueeze(1)
+
+            print(self.query_pos_embed.unsqueeze(1).size())
+            print(x.flatten(2).permute(2, 0, 1).shape)
             x = self.transformer(embedding + 0.1 * x.flatten(2).permute(2, 0, 1),
                                 self.query_pos_embed.unsqueeze(1)).transpose(0, 1)
+
             bbox = self.linear_bbox(x)
+            rotation = self.linear_class(x)
         
-        #print(original_tensor.size())
-        rotation = self.orientation_head(original_tensor)
-        rotation = rotation.view(rotation.size(0), -1)
-        #print(rotation.size())
-        rotation = self.orientation_classifier(rotation)
-        #print(rotation.size())
-        rotation = self.linear_angle(rotation)
-        
+
         return bbox, rotation
 
 

@@ -46,7 +46,7 @@ class draw_bbox():
                                         (rotated_bbox[2,0], rotated_bbox[2,1]), 
                                         (rotated_bbox[3,0], rotated_bbox[3,1])])
         pred_x, pred_y = poly.exterior.xy
-
+        # print(pred_x, pred_y)
         fig, ax = plt.subplots(1)
         ax.imshow(image, aspect='equal')
 
@@ -67,9 +67,12 @@ if __name__ == "__main__":
                                           std=[0.229, 0.224, 0.225])
     #Image to tensor conversion is made implicit inside the class
     dataset = CornellDataset(dataset_path, img_set, transform=normalize)
-    img, gt_class_bbox = dataset.__getitem__(321)
+    #for i in range(1):
+    img, gt_class_bbox = dataset.__getitem__(25)
     bbox = (gt_class_bbox[1]).numpy()
     rot_class = gt_class_bbox[0].numpy()
 
+    print(rot_class, bbox)
+
     bbox_draw = draw_bbox(bbox, rot_class)
-    bbox_draw.draw_rotated_box(img.permute(1, 2, 0))
+    bbox_draw.draw_rotated_box(img)
