@@ -9,7 +9,7 @@ import os
 
 
 class CornellDataset(Dataset):
-    def __init__(self, path, images_set, transform):
+    def __init__(self, path, images_set, transform=None):
         super(CornellDataset, self).__init__()
         self.dataset_path = path
         self.imgset = images_set
@@ -104,7 +104,8 @@ class CornellDataset(Dataset):
                 x2 = float(line_content[3])
                 y1 = float(line_content[2])
                 y2 = float(line_content[4])
-
+                if ((x1 < 0) or (x1 > self.width) or (x2 < 0) or (x2 > self.width) or (y1 < 0) or (y1 > self.height) or (y2 < 0) or (y2 > self.height)):
+                    continue
                 gt_rect[i, : ] = [x1, y1, x2, y2]
 
             return gt_class, gt_rect
@@ -134,7 +135,7 @@ if __name__ == "__main__":
     #Image to tensor conversion is made implicit inside the class
     dataset = CornellDataset(dataset_path, img_set, transform=normalize)
     print(len(dataset))
-    img, gt_class_bbox = dataset.__getitem__(11)
+    img, gt_class_bbox = dataset.__getitem__(9)
     bbox = (gt_class_bbox[1]).numpy()
     print(f"bbox: {bbox}")
     # img = np.transpose(img,(1,2,0)).numpy().astype(np.uint8).copy() 

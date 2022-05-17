@@ -3,8 +3,11 @@
 Helper class to draw bounding boxes given their co-ordinates and orientation
 '''
 import numpy as np
-from shapely.geometry import polygon
+from shapely.geometry import Polygon
 from matplotlib import pyplot as plt
+from cornell_dataset import CornellDataset
+from torchvision import transforms
+import cv2
 
 class draw_bbox():
     def __init__(self, rect, orientation):
@@ -22,9 +25,9 @@ class draw_bbox():
         '''
         R = np.array([[np.cos(angle), np.sin(angle)],
                       [-np.sin(angle), np.cos(angle)]])
-
-        rotated_box = R @ (points-center)
-        return rotated_box+center
+        
+        rotated_box = R @ (points-center).T
+        return rotated_box.T+center
 
     def draw_rotated_box(self, image, plot=False):
         
@@ -45,8 +48,8 @@ class draw_bbox():
         pred_x, pred_y = poly.exterior.xy
 
         fig, ax = plt.subplots(1)
-        # Display the image
-        ax.imshow(image)
+        ax.imshow(image, aspect='equal')
+
 
         plt.plot(pred_x[0:2],pred_y[0:2], color='k', alpha = 0.7, linewidth=1, solid_capstyle='round', zorder=2)
         plt.plot(pred_x[1:3],pred_y[1:3], color='r', alpha = 0.7, linewidth=3, solid_capstyle='round', zorder=2)
@@ -55,7 +58,18 @@ class draw_bbox():
         
         plt.draw()
         plt.show()
-        
+        plt.savefig("Testfig.png")        
 
 if __name__ == "__main__":
-    pass
+    dataset_path = "dataset/cornell"
+    img_set = "train"
+    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                          std=[0.229, 0.224, 0.225])
+    #Image to tensor conversion is made implicit inside the class
+    dataset = CornellDataset(dataset_path, img_set, transform=normalize)
+    img, gt_class_bbox = dataset.__getitem__(321)
+    bbox = (gt_class_bbox[1]).numpy()
+    rot_class = gt_class_bbox[0].numpy()
+
+    bbox_draw = draw_bbox(bbox, rot_class)
+    bbox_draw.draw_rotated_box(img.permute(1, 2, 0))
