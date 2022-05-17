@@ -5,7 +5,7 @@ import scipy
 class HungarianMatcher():
     
     def __init__(self,weight=None,num_class=20):
-        self.bound_loss = torch.nn.MSELoss()
+        self.bound_loss = torch.nn.L1Loss()
         self.class_loss = torch.nn.CrossEntropyLoss()
         if weight is not None:
             self.class_loss = torch.nn.CrossEntropyLoss(weight)
@@ -26,7 +26,7 @@ class HungarianMatcher():
         target_bbox = targets['bbox']
         # target_class = targets['class']
         dist = torch.cdist(output_bbox, target_bbox.unsqueeze(1).to(torch.float), p=1)
-        return torch.argmax(dist,axis=1).squeeze(1)
+        return torch.argmin(dist,axis=1).squeeze(1)
     
     def loss(self,target_dic,output_dic):
         batch_size = output_dic['bbox'].size(0)
