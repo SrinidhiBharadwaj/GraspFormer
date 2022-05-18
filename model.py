@@ -32,13 +32,14 @@ class Keymodel(nn.Module):
     def __init__(self):
         super(Keymodel,self).__init__()
         self.conv_1 = nn.Conv2d(2048,512,1)
-        self.conv_2 = nn.Conv2d(512,64,1)
-        self.fc_encoder = nn.Linear(49,128)
+        self.conv_2 = nn.Conv2d(512,128,1)
+        #self.fc_encoder = nn.Linear(64,128)
     
     def forward(self,encoder_output):
         bs = encoder_output.size(0)
         encoder = self.conv_2(self.conv_1(encoder_output))
-        encoder = self.fc_encoder(encoder.reshape(bs,64,-1))
+        encoder = encoder.reshape(bs,128,-1).permute(0,2,1).contiguous()
+        #encoder = self.fc_encoder(encoder)
         return encoder
 
 class Decoder_head(nn.Module):
@@ -51,6 +52,7 @@ class Decoder_head(nn.Module):
         self.fc2 = nn.Linear(64,16)
         self.bound = nn.Linear(16,num_point)
         self.classification = nn.Linear(16,num_of_class)
+        self.orientation = nn.Linear(16,20)
         self.relu  = nn.ReLU()
     
     def forward(self,x):
@@ -58,6 +60,7 @@ class Decoder_head(nn.Module):
         x = self.relu(self.fc2(x))
         bound = self.bound(x)
         classification = self.classification(x)
+        orientation = self.orientation(x)
         return (bound,classification)
 
 class DETR(nn.Module):

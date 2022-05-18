@@ -22,11 +22,12 @@ class HungarianMatcher():
             bbox is size [batch,num_query,4] we are using only bounding bbox
         '''
         output_bbox = output['bbox']
-        # output_class = output['class']
+        output_class = output['class']
         target_bbox = targets['bbox']
         # target_class = targets['class']
-        dist = torch.cdist(output_bbox, target_bbox.unsqueeze(1).to(torch.float), p=1)
-        return torch.argmin(dist,axis=1).squeeze(1)
+        prob = output_class.softmax(-1)
+        dist = torch.cdist(output_bbox, target_bbox.unsqueeze(1).to(torch.float), p=1).squeeze(-1)
+        return torch.argmin(dist-prob[:,:,0],axis=1)
     
     def loss(self,target_dic,output_dic):
         batch_size = output_dic['bbox'].size(0)
@@ -36,6 +37,7 @@ class HungarianMatcher():
         class_label = torch.ones(batch_size,num_queries).to(output_dic['bbox'].device)
        
         class_label[torch.arange(batch_size),idx] = 0
+        print(output_dic['class'].permute(0,2,1).size(),class_label.size())
         class_loss = self.class_loss(output_dic['class'].permute(0,2,1),class_label.to(torch.long))
-        return class_loss + bound_loss
+        return 0.7*class_loss + 0.3*bound_loss
         
