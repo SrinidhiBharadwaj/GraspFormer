@@ -151,14 +151,16 @@ class Trainer():
                 
                 
                 #Learn orientation model weights regardless
-                target_dic = {'bbox':bbox_label}
+                target_dic = {'bbox':bbox_label,'class':y_class.to(torch.long).to(device)}
                 output_dic = {'bbox':bbox_pred,'class':class_pred}
-                loss = self.loss_obj(target_dic,output_dic)
+                if epoch%5==0:
+                    loss = self.loss_obj(target_dic,output_dic,verbose=True)
+                else:   
+                    loss = self.loss_obj(target_dic,output_dic)
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
                 running_orientation_loss += loss.item()
-                exit()
             #print(f"Epoch: {epoch}, loss: {np.mean(running_orientation_loss)}")
             
             with torch.no_grad():
@@ -169,7 +171,7 @@ class Trainer():
                     bbox_label = y_bb_val.float().to(self.device)
 
                     bbox_pred, class_pred = self.model(x_val)
-                    target_dic = {'bbox':bbox_label}
+                    target_dic = {'bbox':bbox_label,'class':y_class_val.to(torch.long).to(device)}
                     output_dic = {'bbox':bbox_pred,'class':class_pred}
                     loss_val = self.loss_obj(target_dic,output_dic)
                     running_loss_val += loss_val.item()
@@ -212,20 +214,27 @@ if __name__ == "__main__":
             self.y = y.values
         def __len__(self):
             return len(self.paths)
+
+        def box_xyxy_to_cxcywh(self,np_bb):
+            x0,y0,x1,y1 = np_bb
+            b = [(x0 + x1) / 2, (y0 + y1) / 2,
+                (x1 - x0), (y1 - y0)]
+            return np.array(b)
         
         def __getitem__(self, idx):
             path = self.paths[idx]
             y_class = self.y[idx]
             np_bb = np.fromstring(self.bb[idx][2:-1],sep=' ')
+            #np_bb = self.box_xyxy_to_cxcywh(np_bb)
             x, y_bb = transformsXY(path,np_bb , self.transforms)
             x = normalize(x)
             x = np.rollaxis(x, 2)
             return x, y_class, y_bb
 
-    train_ds = RoadDataset(X_train['new_path'],X_train['new_bb'] ,y_train, transforms=True)
+    train_ds = RoadDataset(X_train['new_path'],X_train['new_bb'] ,y_train,transforms=True)
     valid_ds = RoadDataset(X_val['new_path'],X_val['new_bb'],y_val)
 
-    batch_size = 1
+    batch_size = 32
     train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,num_workers=8)
     val_loader = DataLoader(valid_ds, batch_size=batch_size,num_workers=8)
 
@@ -244,7 +253,7 @@ if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Model will be trained on {device}!!")
 
-    model = DETR(num_class=2).to(device) #19 + 1 background class for Cornell Dataset
+    model = DETR(num_class=2,number_of_embed=16).to(device) #19 + 1 background class for Cornell Dataset
     weight = torch.tensor([1,0.1]).to(device)
     print(weight.size())
     loss = HungarianMatcher(weight,num_class=2)
@@ -254,7 +263,7 @@ if __name__ == "__main__":
     lr =1e-3
     optim_bbox = optim.Adam(model.parameters(), lr=lr)
 
-    epochs = 60
+    epochs = 200
 
     train_model = Trainer(model, train_loader, val_loader, device, optim_bbox, loss.loss, epochs)
 
