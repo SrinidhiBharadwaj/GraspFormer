@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torchvision 
 import torch.nn.functional as f
+from torchvision.models import resnet50
 
 
 class DetrDecoder(nn.Module):
@@ -73,7 +74,6 @@ class DETR(nn.Module):
         encoder_key = self.key_model(encoder_out)
         return self.decoder(encoder_key)
 
-
 class detr_simplified(nn.Module):
     def __init__(self, num_classes, embed_dim=256, nhead=8,
                     num_encoders=6, num_decoders=6):
@@ -82,64 +82,65 @@ class detr_simplified(nn.Module):
         self.num_classes = num_classes
         self.hidden_dim = embed_dim
         self.nheads = nhead
-        self.rot_classes = 20 #Set for cornell dataset
+        self.rot_classes = num_classes #Set for cornell dataset
 
         self.encoder = torchvision.models.resnet50(pretrained=True)
         del self.encoder.fc
 
-        for params in self.encoder.parameters():
-            params.requires_grad = False #Do not train the encoder
-        
         self.conv1 = nn.Conv2d(2048, self.hidden_dim, kernel_size=1)
 
         self.transformer = nn.Transformer(d_model=self.hidden_dim, nhead=self.nheads, num_encoder_layers=num_encoders, \
-                                          num_decoder_layers=num_decoders)
+                                          num_decoder_layers=num_decoders, batch_first=False)
         
         self.row_pos_embed = nn.Parameter(torch.rand(50, self.hidden_dim // 2))
         self.col_pos_embed = nn.Parameter(torch.rand(50, self.hidden_dim // 2))
         self.query_pos_embed = nn.Parameter(torch.rand(100, self.hidden_dim))
 
-        #Prediction heads (Might have to add one more for orientation or increase 4 to 5)
         self.linear_bbox = nn.Linear(self.hidden_dim, 4)
-        self.linear_class = nn.Linear(self.hidden_dim, num_classes+1)
-        #Orientation head using pretrained vgg16 module
-        # vgg_16_model = torchvision.models.vgg16(pretrained=True)
-        # self.orientation_head = nn.Sequential(*(list(vgg_16_model.features._modules.values())[:]))
-        # self.orientation_classifier = nn.Sequential(*(list(vgg_16_model.classifier._modules.values())[:-1]))
-        # self.linear_angle = nn.Linear(4096, self.rot_classes)
+        self.linear_class = nn.Linear(self.hidden_dim, self.rot_classes)
 
-    def forward(self, x, orientation_only=False):
-        original_tensor = x
-        bbox = None
-        if not orientation_only:
-            x = self.encoder.conv1(x)
-            x = self.encoder.bn1(x)
-            x = self.encoder.relu(x)
-            x = self.encoder.maxpool(x)
 
-            x = self.encoder.layer1(x)
-            x = self.encoder.layer2(x)
-            x = self.encoder.layer3(x)
-            x = self.encoder.layer4(x)
+    def forward(self, x):
+        x = self.encoder.conv1(x)
+        x = self.encoder.bn1(x)
+        x = self.encoder.relu(x)
+        x = self.encoder.maxpool(x)
 
-            x = self.conv1(x)
-    
-            #Positional embeddings
-            height, width = x.shape[-2:]
-            embedding = torch.cat([self.col_pos_embed[:width].unsqueeze(0).repeat(height, 1, 1),
-                self.row_pos_embed[:height].unsqueeze(1).repeat(1, width, 1)], dim=-1).flatten(0, 1).unsqueeze(1)
+        x = self.encoder.layer1(x)
+        x = self.encoder.layer2(x)
+        x = self.encoder.layer3(x)
+        x = self.encoder.layer4(x)
 
-            print(self.query_pos_embed.unsqueeze(1).size())
-            print(x.flatten(2).permute(2, 0, 1).shape)
-            x = self.transformer(embedding + 0.1 * x.flatten(2).permute(2, 0, 1),
-                                self.query_pos_embed.unsqueeze(1)).transpose(0, 1)
+        x = self.conv1(x)
 
-            bbox = self.linear_bbox(x)
-            rotation = self.linear_class(x)
+        #Positional embeddings
+        height, width = x.shape[-2:]
+        embedding = torch.cat([self.col_pos_embed[:width].unsqueeze(0).repeat(height, 1, 1),
+            self.row_pos_embed[:height].unsqueeze(1).repeat(1, width, 1)], dim=-1).flatten(0, 1).unsqueeze(1)
+        enc_in = embedding + 0.1 * x.flatten(2).permute(2, 0, 1)
+
+        x = self.transformer(enc_in, self.query_pos_embed.unsqueeze(1).repeat(1, enc_in.shape[1], 1))
+        x = x.transpose(0, 1)
+
+        bbox = self.linear_bbox(x)
+        rotation = self.linear_class(x)
         
-
         return bbox, rotation
 
+class DETRModel(nn.Module):
+    def __init__(self,num_classes,num_queries):
+        super(DETRModel,self).__init__()
+        self.num_classes = num_classes
+        self.num_queries = num_queries
+        
+        self.model = torch.hub.load('facebookresearch/detr', 'detr_resnet50', pretrained=True)
+        self.in_features = self.model.class_embed.in_features
+        
+        self.model.class_embed = nn.Linear(in_features=self.in_features,out_features=self.num_classes)
+        self.model.num_queries = self.num_queries
+        
+    def forward(self,images):
+        return self.model(images)
 
 
 class GraspFormer(nn.Module):

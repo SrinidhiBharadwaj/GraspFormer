@@ -1,90 +1,71 @@
+from telnetlib import DET
 import numpy as np
+from numpy import ones
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from torchvision import transforms
 import torch.optim as optim
-from model import GraspFormer, detr_simplified
+from model import GraspFormer, detr_simplified, DETRModel
 from cornell_dataset import CornellDataset
-from hungarian import HungarianMatcher
+#from hungarian import HungarianMatcher
 import os
+import sys
+sys.path.append('./detr/')
+
+from detr.models.matcher import HungarianMatcher
+from detr.models.detr import SetCriterion
 
 class Trainer():
-    def __init__(self, model, train_loader, val_loader, device, optimizer_bbox, loss_bbox, 
-                 optimizer_rot, loss_rot, epochs=10, lr=1e-3):
+    def __init__(self, model, train_loader, val_loader, device, optimizer, criterion, 
+                 epochs=10, lr=1e-3):
         self.model = model
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.epochs = epochs
         self.lr = lr
         self.device = device
-        self.loss_bbox = loss_bbox
-        self.loss_rot = loss_rot
-        self.optimizer_bbox = optimizer_bbox
-        self.optimizer_rot = optimizer_rot
+        self.criterion = criterion
+       
+        self.optimizer = optimizer
         self.save_every = 5 #Save the model every n epochs
 
-    def train_network(self, orientation_only=False):
+    def train_network(self):
         print("Beginning training!!")
-        print(f"Number of training images: {len(self.train_loader)}")
+        print(f"Number of batches: {len(self.train_loader)}")
+
+        model.train()
+        self.criterion.train()
         for epoch in range(self.epochs):
-            running_orientation_loss = 0
             running_bbox_loss = 0
             for t, (x, y) in enumerate(self.train_loader):
                 x = x.to(self.device)
+                # class_label = y[0].float().to(self.device)
+                # bbox_label = y[1].float().to(self.device)
+                y = [{k: v.to(device) for k, v in y.items()}]
+                output = self.model(x)
 
-                class_label = y[0].long().to(self.device)
-                bbox_label = y[1].float().to(self.device)
-                
-                bbox_pred, class_pred = self.model(x, orientation_only)
-
-                if not orientation_only:
-                    #Needs to be filled with loss for bbox matching(matching loss)
-                    #Learn orientation model weights regardless
-                    target_dic = {'bbox':bbox_label}
-                    output_dic = {'bbox':bbox_pred,'class':class_pred}
-                    loss = self.loss_bbox(target_dic,output_dic)
-                    self.optimizer_bbox.zero_grad()
-                    loss.backward()
-                    self.optimizer_bbox.step()
-                    running_bbox_loss += loss.item()
-
-                #Learn orientation model weights regardless
-                orientation_loss = self.loss_rot(class_pred, class_label)
-                self.optimizer_rot.zero_grad()
-                orientation_loss.backward()
-                self.optimizer_rot.step()
-                running_orientation_loss += orientation_loss.item()
-                #print(f"Epoch: {epoch}, Batch: {t}, Orientation_loss: {orientation_loss/len(self.train_loader)}")
+                loss_dict = self.criterion(output, y)
+                weight_dict = self.criterion.weight_dict
+        
+                losses = sum(loss_dict[k] * weight_dict[k] for k in loss_dict.keys() if k in weight_dict)
+       
+                self.optimizer.zero_grad()
+                losses.backward()
+                self.optimizer.step()
+                running_bbox_loss += losses.item()
+                #print(f"Epoch: {epoch}, Batch:{t}, Loss:{losses.item()}")            
+           
+                    
+            print(f"Epoch:{epoch}, Training Loss: {running_bbox_loss/len(self.train_loader)}")
             
-            with torch.no_grad():
-                running_loss_val = 0
-                model.eval()
-                for i, (x_val, y_val) in enumerate(self.val_loader):
-                    x_val = x_val.to(device)
-                    y_val = y_val[0].long().to(device)
-
-                    _, class_pred_val = self.model(x_val, orientation_only)
-                    loss_rot_val = self.loss_rot(class_pred_val, y_val)
-                    running_loss_val += loss_rot_val.item()
-                
-                print(f"Epoch: {epoch}, Training loss: {orientation_loss/len(self.train_loader)}, Validation Loss: {running_loss_val/len(self.val_loader)}")
-
-                print(f"Epoch: {epoch}, loss: {running_bbox_loss/len(self.train_loader)}")
-
-
-            #print(f"Epoch: {epoch}/{self.epochs} --> Orientation_loss: {running_orientation_loss/len(self.train_loader)} \
-             #                         Bbox Matching loss: TBF")
-            
-            if epoch+1 == self.save_every:
+            if (epoch % self.save_every) == 0:
                 save_name = os.path.join('model_{}.ckpt'.format(epoch))
                 torch.save({
                 'epoch': epoch + 1,
                 'model': self.model.state_dict(), # 'model' should be 'model_state_dict'
-                'optimizer_bbox': self.optimizer_bbox.state_dict(),
-                'optimizer_rot': self.optimizer_rot.state_dict(),
-                'loss_bbox': self.loss_bbox.item(),
-                'loss_rot': self.loss_rot.item(),
+                'optimizer_bbox': self.optimizer.state_dict(),
+                'loss': np.mean(running_bbox_loss),
                 }, save_name) 
         
         print("Finished training!")
@@ -105,7 +86,8 @@ if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Model will be trained on {device}!!")
 
-    model = detr_simplified(num_classes=20).to(device) #19 + 1 background class for Cornell Dataset
+    num_classes = 20
+    model = detr_simplified(num_classes).to(device) #19 + 1 background class for Cornell Dataset
 
     #Rotation parameters
     loss_rot = nn.CrossEntropyLoss()
@@ -113,18 +95,19 @@ if __name__ == "__main__":
     optim_rot = optim.SGD(model.parameters(), lr=lr_orientation, momentum=0.9)
 
     #bbox parameters
-    weight = torch.tensor([1,0.1]).to(device)
+    matcher = HungarianMatcher()
+    weight_dict = weight_dict = {'loss_ce': 1, 'loss_bbox': 1 , 'loss_giou': 1}
+    losses = ['labels', 'boxes', 'cardinality']
+    criterion = SetCriterion(num_classes-1, matcher, weight_dict, eos_coef = 0.5, losses=losses)
 
-    loss_bbox = HungarianMatcher(weight,num_class=2)
-    lr_bbox = 1e-3
-    optim_bbox = optim.Adam(model.parameters(), lr=lr_bbox)
+
+    lr = 1e-1
+    optimizer = optim.Adam(model.parameters(), lr=lr)
 
     epochs = 30
-
-    train_model = Trainer(model, train_loader, val_loader, device, optim_bbox, loss_bbox.loss, 
-                            optim_rot, loss_rot, epochs)
-
-    train_model.train_network(orientation_only=False)
+    model = DETRModel(num_classes, num_queries=100).to(device)
+    train_model = Trainer(model, train_loader, val_loader, device, optimizer, criterion, epochs)
+    train_model.train_network()
 
 
 

@@ -1,2 +1,5 @@
 /dataset/ocid/
 /__pycache__/
+/detr/
+/*.ckpt
+/*.ipynb
