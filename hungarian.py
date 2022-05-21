@@ -74,10 +74,10 @@ class HungarianMatcher():
         target_class = targets['class']
         prob = output_class.softmax(-1)
         bs = prob.size(0)
-        dist = torch.cdist(output_bbox, target_bbox.unsqueeze(1).to(torch.float), p=2).squeeze(-1)
+        dist = torch.cdist(output_bbox, target_bbox.unsqueeze(1).to(torch.float), p=1).squeeze(-1)
         
         gen_dist = torch.stack([generalized_box_iou(box_cxcywh_to_xyxy(output_bbox[num]),box_cxcywh_to_xyxy(target_bbox[num].repeat(1,1))) for num in range(bs)]).squeeze(-1)
-        cost =  5*dist- 2*gen_dist#- prob[:,:,0] #- 2*gen_dist
+        cost =  10*dist- 2*gen_dist#- prob[torch.arange(bs),:,target_class] #- 2*gen_dist
         return torch.argmin(cost,axis=1)
     
     
@@ -86,15 +86,16 @@ class HungarianMatcher():
         batch_size = output_dic['bbox'].size(0)
         num_queries = output_dic['bbox'].size(1)
         idx = self.get_index(target_dic,output_dic)
-        if verbose:
-            print(Counter(idx.cpu().detach().numpy()))
+        # if verbose:
+        #     print(Counter(idx.cpu().detach().numpy()))
             #print(idx)
         bound_loss = self.bound_loss(output_dic['bbox'][np.arange(batch_size),idx],target_dic['bbox'].to(torch.float))
-        class_label = torch.ones(batch_size,num_queries).to(output_dic['bbox'].device)#*4
+        class_label = torch.ones(batch_size,num_queries).to(output_dic['bbox'].device)*(self.num_class-1)
        
-        class_label[torch.arange(batch_size),idx] = 0#target_dic['class'].to(torch.float)
+        class_label[torch.arange(batch_size),idx] = target_dic['class'].to(torch.float)
         class_loss = self.class_loss(output_dic['class'].permute(0,2,1),class_label.to(torch.long))
-        gen_loss = torch.stack([generalized_box_iou(output_dic['bbox'][num,idx[num]].unsqueeze(0),target_dic['bbox'][num].unsqueeze(0)) for num in range(batch_size)])
+        gen_loss = torch.stack([1 - generalized_box_iou(box_cxcywh_to_xyxy(output_dic['bbox'][num,idx[num]].unsqueeze(0)),
+                                box_cxcywh_to_xyxy(target_dic['bbox'][num].unsqueeze(0))) for num in range(batch_size)])
 
-        return class_loss + bound_loss+ gen_loss.mean()
+        return class_loss + 10*bound_loss+ 2*gen_loss.mean()
         

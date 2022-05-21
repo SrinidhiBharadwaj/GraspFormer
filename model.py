@@ -34,7 +34,7 @@ class Keymodel(nn.Module):
         self.conv_1 = nn.Conv2d(2048,512,1)
         self.conv_2 = nn.Conv2d(512,64,1)
         self.fc_encoder = nn.Linear(49,128)
-        
+
     def forward(self,encoder_output):
         bs = encoder_output.size(0)
         encoder = self.conv_2(self.conv_1(encoder_output))
@@ -64,7 +64,7 @@ class Decoder_head(nn.Module):
     def forward(self,x):
         x = self.relu(self.fc1(x))
         x = self.relu(self.fc2(x))
-        bound = self.bound(x)
+        bound = self.bound(x).sigmoid()
         classification = self.classification(x)
         orientation = self.orientation(x)
         return (bound,classification)
