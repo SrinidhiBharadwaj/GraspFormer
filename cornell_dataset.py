@@ -36,7 +36,7 @@ class CornellDataset(Dataset):
         #Note: Index being passes is different than the image name, hence this weird synchronoization
         image_path = self.get_image_path(self.img_idx[index])
         img = io.imread(image_path)
-        #img = self.transform(img)
+        img = self.transform(img)
         #print(img.size())
         gt_img_rect = self.rect_dataset_bbox[index]
         gt_img_class = gt_img_rect[0]
@@ -58,11 +58,11 @@ class CornellDataset(Dataset):
                 class_idx = np.argmax(count)
                 gt_class = classes[class_idx]
                 bbox_idx = np.where(gt_img_class == gt_class)[0]
-                gt_bbox = gt_img_box[bbox_idx[0]]
+                gt_bbox = gt_img_box[bbox_idx[0]]/224
         
         #Convert to tensors
         gt_class_bbox = [torch.tensor(gt_class), torch.tensor(gt_bbox)]
-        return img, gt_class_bbox  
+        return img, (gt_class_bbox) 
 
     #Helper functions
     def get_image_path(self, index):

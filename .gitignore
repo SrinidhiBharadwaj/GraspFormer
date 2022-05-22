@@ -1,2 +1,6 @@
 /dataset/ocid/
 /__pycache__/
+/*.ckpt
+/detr/
+/overfit-checkpoints/
+/checkpoints/
