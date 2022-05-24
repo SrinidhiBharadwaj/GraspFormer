@@ -109,8 +109,8 @@ class DETR(nn.Module):
 
 
 class detr_simplified(nn.Module):
-    def __init__(self, num_classes, embed_dim=256, nhead=8,
-                    num_encoders=6, num_decoders=6):
+    def __init__(self, num_classes, embed_dim=64, nhead=2,
+                    num_encoders=2, num_decoders=2):
         
         super(detr_simplified, self).__init__()
         self.num_classes = num_classes
@@ -118,13 +118,13 @@ class detr_simplified(nn.Module):
         self.nheads = nhead
         self.rot_classes = 20 #Set for cornell dataset
 
-        self.encoder = torchvision.models.resnet50(pretrained=True)
+        self.encoder = torchvision.models.resnet18(pretrained=True)
         del self.encoder.fc
 
         for params in self.encoder.parameters():
             params.requires_grad = False #Do not train the encoder
         
-        self.conv1 = nn.Conv2d(2048, self.hidden_dim, kernel_size=1)
+        self.conv1 = nn.Conv2d(512, self.hidden_dim, kernel_size=1)
 
         self.transformer = nn.Transformer(d_model=self.hidden_dim, nhead=self.nheads, num_encoder_layers=num_encoders, \
                                           num_decoder_layers=num_decoders)
@@ -140,6 +140,7 @@ class detr_simplified(nn.Module):
     def forward(self, x, orientation_only=False):
         original_tensor = x
         bbox = None
+        output = {}
         if not orientation_only:
             x = self.encoder.conv1(x)
             x = self.encoder.bn1(x)
@@ -165,8 +166,9 @@ class detr_simplified(nn.Module):
             bbox = self.linear_bbox(x).sigmoid() * 224.
             rotation = self.linear_class(x)
         
-
-        return bbox, rotation
+        output["pred_boxes"] = bbox
+        output["pred_logits"] = rotation
+        return output
 
 class DETRModel(nn.Module):
     def __init__(self,num_classes,num_queries):

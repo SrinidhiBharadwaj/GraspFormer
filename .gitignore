@@ -3,4 +3,6 @@
 /*.ckpt
 /detr/
 /overfit-checkpoints/
+/overfit-second/
+/overfit-third/
 /checkpoints/

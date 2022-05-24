@@ -65,14 +65,19 @@ if __name__ == "__main__":
     img_set = "train"
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                           std=[0.229, 0.224, 0.225])
+    inv_normalize = transforms.Normalize(
+                            mean=[-0.485/0.229, -0.456/0.224, -0.406/0.225],
+                            std=[1/0.229, 1/0.224, 1/0.225])
     #Image to tensor conversion is made implicit inside the class
     dataset = CornellDataset(dataset_path, img_set, transform=normalize)
-    #for i in range(1):
     img, gt_class_bbox = dataset.__getitem__(25)
-    bbox = (gt_class_bbox[1]).numpy()
+    bbox = (gt_class_bbox[1]).numpy() * 224
+    bbox = bbox.astype(np.uint8)
     rot_class = gt_class_bbox[0].numpy()
 
     print(rot_class, bbox)
-
+    fig, ax = plt.subplots(1)
+    ax.imshow(inv_normalize(img).permute(1, 2, 0).numpy(), aspect='equal')
     bbox_draw = draw_bbox(bbox, rot_class)
-    bbox_draw.draw_rotated_box(img)
+    plt.savefig("Testfig.png") 
+   # bbox_draw.draw_rotated_box(inv_normalize(img).permute(1, 2, 0).numpy())

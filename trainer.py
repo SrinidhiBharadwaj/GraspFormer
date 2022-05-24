@@ -1,4 +1,3 @@
-from tabnanny import verbose
 import numpy as np
 import torch
 import torch.nn as nn
@@ -36,7 +35,7 @@ class Trainer():
 
                 class_label = y[0].long().to(self.device)
                 bbox_label = y[1].float().to(self.device)
-                
+      
                 output = self.model(x)
                 bbox_pred = output["pred_boxes"]
                 class_pred = output["pred_logits"]
@@ -65,14 +64,15 @@ class Trainer():
                     output = self.model(x)
                     bbox_pred = output["pred_boxes"]
                     class_pred = output["pred_logits"]
-                    #bbox_pred, class_pred = self.model(x)
+                    # bbox_pred, class_pred = self.model(x)
 
                     target_dic = {'bbox':bbox_label, 'class':class_label}
                     output_dic = {'bbox':bbox_pred,'class':class_pred}
 
                     loss = self.loss_bbox(target_dic,output_dic)
                     running_val_loss += loss.item() 
-            #self.scheduler.step()
+
+            self.scheduler.step(running_bbox_loss)
             print(f"Epoch: {epoch}, Train Loss: {running_bbox_loss/len(self.train_loader)}, Val Loss: {running_val_loss/len(self.val_loader)}")
 
 
@@ -105,17 +105,17 @@ if __name__ == "__main__":
     print(f"Model will be trained on {device}!!")
 
     model = detr_simplified(num_classes=20)
-    model = DETRModel(num_classes=20, num_queries=16)
+    #model = DETRModel(num_classes=20, num_queries=8)
+    #model = DETR(num_class=20)
     #bbox parameters
-    weight = torch.tensor([1,0.1]).to(device)
 
     loss_bbox = HungarianMatcherOverLoad(num_class=20)
-    lr_bbox = 1e-5
+    lr_bbox = 1e-3
     optim_bbox = optim.AdamW(model.parameters(), lr=lr_bbox)
-    scheduler = lr_scheduler.StepLR(optim_bbox, step_size=10, gamma=0.3)
+    scheduler = lr_scheduler.ReduceLROnPlateau(optim_bbox, 'min', verbose=True)
 
 
-    epochs = 100
+    epochs = 1000
 
     train_model = Trainer(model, train_loader, val_loader, device, optim_bbox, loss_bbox.loss, scheduler, epochs)
 
@@ -124,4 +124,3 @@ if __name__ == "__main__":
 
 
     
-

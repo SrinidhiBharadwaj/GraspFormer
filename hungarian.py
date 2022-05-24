@@ -51,7 +51,6 @@ class HungarianMatcherOverLoad():
     def get_index(self,targets,output):
 
         output_bbox = output['bbox'].cpu().numpy()
-        class_label = output['class']
         target_bbox = targets['bbox']
         
         ious = self.iou(output_bbox, target_bbox.unsqueeze(1).repeat(1, output_bbox.shape[1], 1).cpu().numpy())
