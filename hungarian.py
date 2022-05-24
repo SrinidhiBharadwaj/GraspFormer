@@ -58,12 +58,16 @@ class HungarianMatcherOverLoad():
 
         return (idx)
     
-    def loss(self,target_dic,output_dic):
+    def loss(self,target_dic,output_dic, device="cpu"):
+        batch_size = target_dic["bbox"].shape[0]
+        idx = self.get_index(target_dic,output_dic) 
 
-        idx = self.get_index(target_dic,output_dic)  
-        for i in (idx):
-            bboxes_pred_per_batch = output_dic['bbox'][:, i, :]
-            classes_pred_per_batch = output_dic['class'][:, i, :]
+        bboxes_pred_per_batch =torch.zeros(batch_size, 4).to(device)
+        classes_pred_per_batch = torch.zeros(batch_size, 20).to(device)
+        for i in range(len(idx)):
+            bboxes_pred_per_batch[i, :] = output_dic['bbox'][i, idx[i], :]
+            classes_pred_per_batch[i, :] = output_dic['class'][i, idx[i], :]
+
         bound_loss = self.bound_loss(bboxes_pred_per_batch,target_dic['bbox'].to(torch.float))
         class_label = target_dic['class']
 

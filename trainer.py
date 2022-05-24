@@ -44,10 +44,11 @@ class Trainer():
         
                 #Needs to be filled with loss for bbox matching(matching loss)
                 #Learn orientation model weights regardless
+                #print(bbox_label.shape)
                 target_dic = {'bbox':bbox_label, 'class':class_label}
                 output_dic = {'bbox':bbox_pred,'class':class_pred}
 
-                loss = self.loss_bbox(target_dic,output_dic)
+                loss = self.loss_bbox(target_dic,output_dic, self.device)
                 self.optimizer_bbox.zero_grad()
                 loss.backward()
                 self.optimizer_bbox.step()
@@ -69,7 +70,7 @@ class Trainer():
                     target_dic = {'bbox':bbox_label, 'class':class_label}
                     output_dic = {'bbox':bbox_pred,'class':class_pred}
 
-                    loss = self.loss_bbox(target_dic,output_dic)
+                    loss = self.loss_bbox(target_dic,output_dic, self.device)
                     running_val_loss += loss.item() 
 
             self.scheduler.step(running_bbox_loss)
@@ -104,18 +105,18 @@ if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Model will be trained on {device}!!")
 
-    model = detr_simplified(num_classes=20)
-    #model = DETRModel(num_classes=20, num_queries=8)
+    #model = detr_simplified(num_classes=20)
+    model = DETRModel(num_classes=20, num_queries=8)
     #model = DETR(num_class=20)
     #bbox parameters
 
     loss_bbox = HungarianMatcherOverLoad(num_class=20)
-    lr_bbox = 1e-3
+    lr_bbox = 1e-4
     optim_bbox = optim.AdamW(model.parameters(), lr=lr_bbox)
     scheduler = lr_scheduler.ReduceLROnPlateau(optim_bbox, 'min', verbose=True)
 
 
-    epochs = 1000
+    epochs = 100
 
     train_model = Trainer(model, train_loader, val_loader, device, optim_bbox, loss_bbox.loss, scheduler, epochs)
 

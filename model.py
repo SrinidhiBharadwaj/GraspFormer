@@ -131,7 +131,7 @@ class detr_simplified(nn.Module):
         
         self.row_pos_embed = nn.Parameter(torch.rand(50, self.hidden_dim // 2))
         self.col_pos_embed = nn.Parameter(torch.rand(50, self.hidden_dim // 2))
-        self.query_pos_embed = nn.Parameter(torch.rand(100, self.hidden_dim))
+        self.query_pos_embed = nn.Parameter(torch.rand(8, self.hidden_dim))
 
         self.linear_bbox = nn.Linear(self.hidden_dim, 4)
         self.linear_class = nn.Linear(self.hidden_dim, num_classes)
@@ -156,6 +156,7 @@ class detr_simplified(nn.Module):
     
             #Positional embeddings
             height, width = x.shape[-2:]
+            
             embedding = torch.cat([self.col_pos_embed[:width].unsqueeze(0).repeat(height, 1, 1),
                 self.row_pos_embed[:height].unsqueeze(1).repeat(1, width, 1)], dim=-1).flatten(0, 1).unsqueeze(1)
 
