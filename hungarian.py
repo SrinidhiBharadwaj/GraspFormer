@@ -2,6 +2,8 @@ from matplotlib.pyplot import axis
 import numpy as np
 import torch
 import scipy
+from torchvision.ops.boxes import _box_inter_union
+
 
 class HungarianMatcher():
     
@@ -69,12 +71,13 @@ class HungarianMatcherOverLoad():
             classes_pred_per_batch[i, :] = output_dic['class'][i, idx[i], :]
 
         bound_loss = self.bound_loss(bboxes_pred_per_batch,target_dic['bbox'].to(torch.float))
+
         class_label = target_dic['class']
-
         class_loss = self.class_loss(classes_pred_per_batch,class_label.to(torch.long))
-        return 0.3*class_loss + 0.7*bound_loss
+        
+        return class_loss + bound_loss
 
-    def iou(self, box1,box2):
+    def iou(self, box1,box2, eps=1e-7):
         '''
         box1: [bs, num_questies, 4]
         box2: [1, num_queriebs, 4]
@@ -85,4 +88,34 @@ class HungarianMatcherOverLoad():
         inter_area = np.maximum(0, (x2 - x1 + 1)) * np.maximum(0, (y2 - y1 + 1))
         union_area = (box1[:, :, 2] - box1[:, :, 0] + 1) * (box1[:, :, 3] - box1[:, :, 1] + 1) + (box2[:, :, 2] - box2[:, :, 0] + 1) * (box2[:, :, 3] - box2[:, :, 1] + 1) - inter_area
 
-        return inter_area/union_area
+        return inter_area/(union_area+eps)
+    
+    def iou_loss(self, box1,box2, eps=1e-7):
+        '''
+        box1: [bs, num_questies, 4]
+        box2: [1, num_queriebs, 4]
+        '''
+        inter, union = _box_inter_union(box1, box2)
+        iou = inter / union
+        return (1 - iou).sum()
+
+    def giou_loss(self, input_boxes, target_boxes, eps=1e-7):
+        """
+        Args:
+            input_boxes: Tensor of shape (N, 4) or (4,).
+            target_boxes: Tensor of shape (N, 4) or (4,).
+            eps (float): small number to prevent division by zero
+        """
+        inter, union = _box_inter_union(input_boxes, target_boxes)
+        iou = inter / union
+
+        # area of the smallest enclosing box
+        min_box = torch.min(input_boxes, target_boxes)
+        max_box = torch.max(input_boxes, target_boxes)
+        area_c = (max_box[:, 2] - min_box[:, 0]) * (max_box[:, 3] - min_box[:, 1])
+
+        giou = iou - ((area_c - union) / (area_c + eps))
+
+        loss = 1 - giou
+
+        return loss.sum()

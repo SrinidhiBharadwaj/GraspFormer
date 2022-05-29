@@ -119,19 +119,18 @@ class detr_simplified(nn.Module):
         self.rot_classes = 20 #Set for cornell dataset
 
         self.encoder = torchvision.models.resnet18(pretrained=True)
-        del self.encoder.fc
 
-        for params in self.encoder.parameters():
+        for params in list(self.encoder.children())[:-2]:
             params.requires_grad = False #Do not train the encoder
         
         self.conv1 = nn.Conv2d(512, self.hidden_dim, kernel_size=1)
 
         self.transformer = nn.Transformer(d_model=self.hidden_dim, nhead=self.nheads, num_encoder_layers=num_encoders, \
-                                          num_decoder_layers=num_decoders)
+                                          num_decoder_layers=num_decoders, dropout=0.4)
         
         self.row_pos_embed = nn.Parameter(torch.rand(50, self.hidden_dim // 2))
         self.col_pos_embed = nn.Parameter(torch.rand(50, self.hidden_dim // 2))
-        self.query_pos_embed = nn.Parameter(torch.rand(8, self.hidden_dim))
+        self.query_pos_embed = nn.Parameter(torch.rand(4, self.hidden_dim))
 
         self.linear_bbox = nn.Linear(self.hidden_dim, 4)
         self.linear_class = nn.Linear(self.hidden_dim, num_classes)
@@ -164,7 +163,7 @@ class detr_simplified(nn.Module):
             x = self.transformer(enc_in,
                                 self.query_pos_embed.unsqueeze(1).repeat(1, enc_in.size(1), 1)).transpose(0, 1)
 
-            bbox = self.linear_bbox(x).sigmoid() * 224.
+            bbox = self.linear_bbox(x).sigmoid()
             rotation = self.linear_class(x)
         
         output["pred_boxes"] = bbox
@@ -179,7 +178,7 @@ class DETRModel(nn.Module):
         
         self.model = torch.hub.load('facebookresearch/detr', 'detr_resnet50', pretrained=True)
         self.in_features = self.model.class_embed.in_features
-        
+        self.model.dropout = 0.2
         self.model.class_embed = nn.Linear(in_features=self.in_features,out_features=self.num_classes)
         self.model.num_queries = self.num_queries
         

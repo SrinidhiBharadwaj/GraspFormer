@@ -1,6 +1,5 @@
 import numpy as np
 import torch
-import torch.nn as nn
 from torch.utils.data import DataLoader
 from torchvision import transforms
 import torch.optim as optim
@@ -9,6 +8,8 @@ from model import GraspFormer, detr_simplified, DETRModel, DETR
 from cornell_dataset import CornellDataset
 from hungarian import HungarianMatcher, HungarianMatcherOverLoad
 import os
+from torch.utils.tensorboard import SummaryWriter
+
 
 class Trainer():
     def __init__(self, model, train_loader, val_loader, device, optimizer_bbox, loss_bbox, scheduler, epochs=10, lr=1e-3):
@@ -22,6 +23,7 @@ class Trainer():
         self.optimizer_bbox = optimizer_bbox
         self.save_every = 5 #Save the model every n epochs
         self.scheduler = scheduler
+        self.writer = SummaryWriter()
 
     def train_network(self, orientation_only=False):
         print("Beginning training!!")
@@ -29,7 +31,8 @@ class Trainer():
         self.model = self.model.to(device)
         for epoch in range(self.epochs):
             running_val_loss = 0
-            running_bbox_loss = 0
+            running_train_loss = 0
+            model.train()
             for t, (x, y) in enumerate(self.train_loader):
                 x = x.to(self.device)
 
@@ -37,10 +40,10 @@ class Trainer():
                 bbox_label = y[1].float().to(self.device)
       
                 output = self.model(x)
-                bbox_pred = output["pred_boxes"]
-                class_pred = output["pred_logits"]
+                # bbox_pred = output["pred_boxes"]
+                # class_pred = output["pred_logits"]
          
-                #bbox_pred, class_pred = self.model(x)
+                bbox_pred, class_pred = self.model(x)
         
                 #Needs to be filled with loss for bbox matching(matching loss)
                 #Learn orientation model weights regardless
@@ -52,8 +55,9 @@ class Trainer():
                 self.optimizer_bbox.zero_grad()
                 loss.backward()
                 self.optimizer_bbox.step()
-                running_bbox_loss += loss.item()
-            
+                running_train_loss += loss.item()
+            self.scheduler.step(running_train_loss)
+
             with torch.no_grad():
                 model.eval()
                 for i, (x, y) in enumerate(self.val_loader):
@@ -63,9 +67,9 @@ class Trainer():
                     bbox_label = y[1].float().to(self.device)
                     
                     output = self.model(x)
-                    bbox_pred = output["pred_boxes"]
-                    class_pred = output["pred_logits"]
-                    # bbox_pred, class_pred = self.model(x)
+                    # bbox_pred = output["pred_boxes"]
+                    # class_pred = output["pred_logits"]
+                    bbox_pred, class_pred = self.model(x)
 
                     target_dic = {'bbox':bbox_label, 'class':class_label}
                     output_dic = {'bbox':bbox_pred,'class':class_pred}
@@ -73,20 +77,21 @@ class Trainer():
                     loss = self.loss_bbox(target_dic,output_dic, self.device)
                     running_val_loss += loss.item() 
 
-            self.scheduler.step(running_bbox_loss)
-            print(f"Epoch: {epoch}, Train Loss: {running_bbox_loss/len(self.train_loader)}, Val Loss: {running_val_loss/len(self.val_loader)}")
-
-
-            #print(f"Epoch: {epoch}/{self.epochs} --> Orientation_loss: {running_orientation_loss/len(self.train_loader)} \
-             #                         Bbox Matching loss: TBF")
+            self.writer.add_scalar("Train Loss", running_train_loss/len(self.train_loader), epoch)
+            self.writer.add_scalar("Val Loss", running_val_loss/len(self.val_loader), epoch)
+           
+            print(f"Epoch: {epoch}, Train Loss: {running_train_loss/len(self.train_loader)}, Val Loss: {running_val_loss/len(self.val_loader)}")
             
             if (epoch+1) % self.save_every == 0:
-                save_name = os.path.join('model_{}.ckpt'.format(epoch))
+                save_name = os.path.join('model_{}.ckpt'.format(epoch+1))
                 torch.save({
-                'epoch': epoch + 1,
+                'epoch': epoch+1,
                 'model': self.model.state_dict(), # 'model' should be 'model_state_dict'
                 }, save_name) 
-        
+
+        self.writer.flush()
+        self.writer.close()
+
         print("Finished training!")
 
 if __name__ == "__main__":
@@ -106,17 +111,15 @@ if __name__ == "__main__":
     print(f"Model will be trained on {device}!!")
 
     #model = detr_simplified(num_classes=20)
-    model = DETRModel(num_classes=20, num_queries=8)
-    #model = DETR(num_class=20)
+    #model = DETRModel(num_classes=20, num_queries=4)
+    model = DETR(num_class=20)
     #bbox parameters
 
     loss_bbox = HungarianMatcherOverLoad(num_class=20)
     lr_bbox = 1e-4
     optim_bbox = optim.AdamW(model.parameters(), lr=lr_bbox)
     scheduler = lr_scheduler.ReduceLROnPlateau(optim_bbox, 'min', verbose=True)
-
-
-    epochs = 100
+    epochs = 500
 
     train_model = Trainer(model, train_loader, val_loader, device, optim_bbox, loss_bbox.loss, scheduler, epochs)
 
