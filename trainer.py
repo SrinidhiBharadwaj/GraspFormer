@@ -195,69 +195,69 @@ class Trainer():
         print("Finished training!")
 
 if __name__ == "__main__":
-    df_train = pd.read_csv('traffic_data.csv')
-    X = df_train[['new_path', 'new_bb']]
-    Y = df_train['class']
+    # df_train = pd.read_csv('traffic_data.csv')
+    # X = df_train[['new_path', 'new_bb']]
+    # Y = df_train['class']
 
-    X_train, X_val, y_train, y_val = train_test_split(X, Y, test_size=0.2, random_state=42)
+    # X_train, X_val, y_train, y_val = train_test_split(X, Y, test_size=0.2, random_state=42)
 
-    def normalize(im):
-        """Normalizes images with Imagenet stats."""
-        imagenet_stats = np.array([[0.485, 0.456, 0.406], [0.229, 0.224, 0.225]])
-        return (im - imagenet_stats[0])/imagenet_stats[1]
+    # def normalize(im):
+    #     """Normalizes images with Imagenet stats."""
+    #     imagenet_stats = np.array([[0.485, 0.456, 0.406], [0.229, 0.224, 0.225]])
+    #     return (im - imagenet_stats[0])/imagenet_stats[1]
 
-    class RoadDataset(Dataset):
-        def __init__(self, paths, bb, y, transforms=False):
-            self.transforms = transforms
-            self.paths = paths.values
-            self.bb = bb.values
-            self.y = y.values
-        def __len__(self):
-            return len(self.paths)
+    # class RoadDataset(Dataset):
+    #     def __init__(self, paths, bb, y, transforms=False):
+    #         self.transforms = transforms
+    #         self.paths = paths.values
+    #         self.bb = bb.values
+    #         self.y = y.values
+    #     def __len__(self):
+    #         return len(self.paths)
 
-        def box_xyxy_to_cxcywh(self,np_bb):
-            x0,y0,x1,y1 = np_bb
-            b = [(x0 + x1) / 2, (y0 + y1) / 2,
-                (x1 - x0), (y1 - y0)]
-            return np.array(b)
+    #     def box_xyxy_to_cxcywh(self,np_bb):
+    #         x0,y0,x1,y1 = np_bb
+    #         b = [(x0 + x1) / 2, (y0 + y1) / 2,
+    #             (x1 - x0), (y1 - y0)]
+    #         return np.array(b)
         
-        def __getitem__(self, idx):
-            path = self.paths[idx]
-            y_class = self.y[idx]
-            np_bb = np.fromstring(self.bb[idx][2:-1],sep=' ')
-            x, y_bb = transformsXY(path,np_bb , self.transforms)
-            y_bb = self.box_xyxy_to_cxcywh(y_bb)
-            x = normalize(x)
-            x = np.rollaxis(x, 2)
-            return x, y_class, y_bb/224.0
+    #     def __getitem__(self, idx):
+    #         path = self.paths[idx]
+    #         y_class = self.y[idx]
+    #         np_bb = np.fromstring(self.bb[idx][2:-1],sep=' ')
+    #         x, y_bb = transformsXY(path,np_bb , self.transforms)
+    #         y_bb = self.box_xyxy_to_cxcywh(y_bb)
+    #         x = normalize(x)
+    #         x = np.rollaxis(x, 2)
+    #         return x, y_class, y_bb/224.0
 
-    train_ds = RoadDataset(X_train['new_path'],X_train['new_bb'] ,y_train,transforms=True)
-    valid_ds = RoadDataset(X_val['new_path'],X_val['new_bb'],y_val)
-
-    batch_size = 32
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,num_workers=8)
-    val_loader = DataLoader(valid_ds, batch_size=batch_size,num_workers=8)
-
-
-    # dataset_path = "dataset/cornell"
-    # img_set = "train"
-    # normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-    #                                      std=[0.229, 0.224, 0.225])
-    # train_dataset = CornellDataset(dataset_path, "train", normalize)
-    # val_dataset = CornellDataset(dataset_path, "val", normalize)
+    # train_ds = RoadDataset(X_train['new_path'],X_train['new_bb'] ,y_train,transforms=True)
+    # valid_ds = RoadDataset(X_val['new_path'],X_val['new_bb'],y_val)
 
     # batch_size = 32
-    # train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True,num_workers=8)
-    # val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True,num_workers=8)
+    # train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,num_workers=8)
+    # val_loader = DataLoader(valid_ds, batch_size=batch_size,num_workers=8)
+
+
+    dataset_path = "dataset/cornell"
+    img_set = "train"
+    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                         std=[0.229, 0.224, 0.225])
+    train_dataset = CornellDataset(dataset_path, "train", normalize)
+    val_dataset = CornellDataset(dataset_path, "val", normalize)
+
+    batch_size = 32
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True,num_workers=8)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True,num_workers=8)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Model will be trained on {device}!!")
 
-    model = DETR(num_class=5,number_of_embed=16).to(device) #19 + 1 background class for Cornell Dataset
-    checkpoint = torch.load('model_499.ckpt')
-    model.load_state_dict(checkpoint['model'])
+    model = DETR(num_class=2,number_of_embed=16).to(device) #19 + 1 background class for Cornell Dataset
+    #checkpoint = torch.load('model_499.ckpt')
+    # model.load_state_dict(checkpoint['model'])
 
-    weight = torch.tensor([10,10,10,10,0.1]).to(device)
+    weight = torch.tensor([10,0.1]).to(device)
     print(weight.size())
     loss = HungarianMatcher(weight,num_class=5)
    
