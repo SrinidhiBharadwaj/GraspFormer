@@ -3,7 +3,7 @@
 Helper class to draw bounding boxes given their co-ordinates and orientation
 '''
 import numpy as np
-from shapely.geometry import polygon
+from shapely.geometry import Polygon
 from matplotlib import pyplot as plt
 
 class draw_bbox():
@@ -23,8 +23,8 @@ class draw_bbox():
         R = np.array([[np.cos(angle), np.sin(angle)],
                       [-np.sin(angle), np.cos(angle)]])
 
-        rotated_box = R @ (points-center)
-        return rotated_box+center
+        rotated_box = R @ (points-center).T
+        return rotated_box.T+center
 
     def draw_rotated_box(self, image, plot=False):
         
@@ -34,7 +34,7 @@ class draw_bbox():
                             [self.rect[0], self.rect[3]]])
         center = np.array([(self.rect[0] + self.rect[2])/2, (self.rect[1] + self.rect[3])/2])
         #Angle to radians
-        orientation = -np.pi/2-np.pi/20*(self.orientation - 1)
+        orientation = (np.pi/20.0)*(self.orientation)#-np.pi/2-np.pi/20*(self.orientation - 1)
         rotated_bbox = self.rotate_box(points, center, orientation)
 
         #Ref: https://stackoverflow.com/questions/30457089/how-to-create-a-shapely-polygon-from-a-list-of-shapely-points

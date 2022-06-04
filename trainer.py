@@ -132,18 +132,19 @@ class Trainer():
         self.loss_obj = loss_funtion
         self.optimizer = optimizer
        
-        self.save_every = 100 #Save the model every n epochs
+        self.save_every = 25 #Save the model every n epochs
 
     def train_network(self, orientation_only=False):
         print("Beginning training!!")
         print(f"Number of training images: {len(self.train_loader)}")
         for epoch in range(self.epochs):
-            running_orientation_loss = 0
-            for t, (x, y_class, y_bb) in enumerate(self.train_loader):
+            running_orientation_loss = []
+            for t, (x, y) in enumerate(self.train_loader):
 
                 x = x.to(torch.float32).to(self.device)
-
-                # class_label = y[0].long().to(self.device)
+                y_class,y_bb = y
+                
+                #class_label = y[0].long().to(self.device)
                 bbox_label = y_bb.float().to(self.device)
                 #print(bbox_label)
                 
@@ -153,28 +154,30 @@ class Trainer():
                 #Learn orientation model weights regardless
                 target_dic = {'bbox':bbox_label,'class':y_class.to(torch.long).to(device)}
                 output_dic = {'bbox':bbox_pred,'class':class_pred}
-                if epoch%10==0:
+                if epoch%100==0:
                     loss = self.loss_obj(target_dic,output_dic,verbose=True)
                 else:   
                     loss = self.loss_obj(target_dic,output_dic)
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
-                running_orientation_loss += loss.item()
+                running_orientation_loss.append(loss.item())
             #print(f"Epoch: {epoch}, loss: {np.mean(running_orientation_loss)}")
             
             with torch.no_grad():
-                running_loss_val = 0
+                running_loss_val = []
                 self.model.eval()
-                for i, (x_val, y_class_val, y_bb_val) in enumerate(self.val_loader):
+                for i, (x_val, y_val) in enumerate(self.val_loader):
                     x_val = x_val.to(torch.float32).to(device)
+                    
+                    y_class_val,y_bb_val = y_val
                     bbox_label = y_bb_val.float().to(self.device)
 
                     bbox_pred, class_pred = self.model(x_val)
                     target_dic = {'bbox':bbox_label,'class':y_class_val.to(torch.long).to(device)}
                     output_dic = {'bbox':bbox_pred,'class':class_pred}
                     loss_val = self.loss_obj(target_dic,output_dic)
-                    running_loss_val += loss_val.item()
+                    running_loss_val.append(loss_val.item())
                     
                 print("Epoch: {0}, Training loss: {1}, \
                                 Validation Loss: {2}".format(epoch,np.mean(running_orientation_loss),np.mean(running_loss_val)))
@@ -247,26 +250,33 @@ if __name__ == "__main__":
     val_dataset = CornellDataset(dataset_path, "val", normalize)
 
     batch_size = 32
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True,num_workers=8)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True,num_workers=8)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True,num_workers=1)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True,num_workers=1)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Model will be trained on {device}!!")
-
-    model = DETR(num_class=2,number_of_embed=16).to(device) #19 + 1 background class for Cornell Dataset
+    num_class=21
+    model = DETR(num_class=num_class,number_of_embed=16).to(device) #19 + 1 background class for Cornell Dataset
     #checkpoint = torch.load('model_499.ckpt')
     # model.load_state_dict(checkpoint['model'])
-
-    weight = torch.tensor([10,0.1]).to(device)
-    print(weight.size())
-    loss = HungarianMatcher(weight,num_class=5)
+#     d= []
+#     for t, (x, y) in enumerate(train_loader):
+#         d.append(y[0])
+#     d = torch.cat(d)
+#     print(torch.min(d),torch.max(d))
+#     print(Counter(d.numpy()))
+    
+    weight = torch.ones(num_class).to(device)*10
+    weight[num_class-1]=0.01
+    print(weight,weight.size())
+    loss = HungarianMatcher(weight,num_class=num_class)
    
 
     #bbox parameters
-    lr =1e-3
+    lr =1e-4
     optim_bbox = optim.Adam(model.parameters(), lr=lr)
 
-    epochs = 1000
+    epochs = 500
 
     train_model = Trainer(model, train_loader, val_loader, device, optim_bbox, loss.loss, epochs)
 

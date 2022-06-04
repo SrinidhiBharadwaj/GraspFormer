@@ -76,14 +76,14 @@ class CornellDataset(Dataset):
         # img, gt_bbox = self.scale(img, gt_bbox.reshape(1, -1).astype(np.float64))
         # img, gt_bbox  = self.translate(img, gt_bbox.reshape(1, -1).astype(np.float64))
         # img, gt_bbox = self.flip(img, gt_bbox.reshape(1, -1).astype(np.float64))
-        x1, y1, x2, y2 = gt_bbox/224
+        x1, y1, x2, y2 = gt_bbox/self.width
         gt_bbox=[(x1 + x2) / 2, (y1 + y2) / 2, (x2 - x1), (y2 - y1)]
         img = self.transform(img.copy())
         gt_bbox = torch.tensor(gt_bbox)
         if gt_bbox.shape[0] == 1:
             gt_bbox = gt_bbox.squeeze(0)
-        gt_class_bbox = [torch.tensor(gt_class), torch.tensor(gt_bbox)]
-
+        #gt_class_bbox = [torch.tensor(gt_class), torch.tensor(gt_bbox)]
+        gt_class_bbox = [gt_class, gt_bbox]
         return img, gt_class_bbox
 
     #Helper functions

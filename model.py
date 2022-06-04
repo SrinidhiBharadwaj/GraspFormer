@@ -74,8 +74,8 @@ class DETR(nn.Module):
     model class for detr class
     '''
     def __init__(self,encoder=None,key_model=None,decoder=None,
-                num_class=20,num_point=4,embed_dim=128,nhead=32,
-                numlayers=3,number_of_embed=16):
+                num_class=20,num_point=4,embed_dim=128,nhead=4,
+                numlayers=1,number_of_embed=16):
         '''
         inputs:
             encoder_pre_model :encoder pretrained model 
