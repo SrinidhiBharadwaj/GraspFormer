@@ -53,9 +53,10 @@ class HungarianMatcher():
     
     def __init__(self,weight=None,num_class=20):
         self.bound_loss = torch.nn.L1Loss()
-        self.class_loss = torch.nn.CrossEntropyLoss()
+        self.class_loss = torch.nn.BCEWithLogitsLoss()#torch.nn.CrossEntropyLoss()
         if weight is not None:
-            self.class_loss = torch.nn.CrossEntropyLoss(weight)
+            self.class_loss =  torch.nn.BCEWithLogitsLoss(weight)##torch.nn.CrossEntropyLoss(weight)
+        self.class_loss_ort = torch.nn.CrossEntropyLoss()
         self.num_class = num_class
         
     @torch.no_grad()
@@ -71,13 +72,15 @@ class HungarianMatcher():
         output_bbox = output['bbox']
         output_class = output['class']
         target_bbox = targets['bbox']
-        target_class = targets['class']
-        prob = output_class.softmax(-1)
+        target_class = [0]*targets['class'].size(0)
+        prob = output_class.sigmoid()#softmax(-1)
+        #print(prob.size())
         bs = prob.size(0)
         dist = torch.cdist(output_bbox, target_bbox.unsqueeze(1).to(torch.float), p=1).squeeze(-1)
         
         gen_dist = torch.stack([generalized_box_iou(box_cxcywh_to_xyxy(output_bbox[num]),box_cxcywh_to_xyxy(target_bbox[num].repeat(1,1))) for num in range(bs)]).squeeze(-1)
-        cost =  5*dist- 2*gen_dist - prob[torch.arange(bs),:,target_class] #- 2*gen_dist
+        #print(dist.size())
+        cost =  5*dist-2*gen_dist #+ 2*prob#[torch.arange(bs),:,target_class] #- 2*gen_dist
         return (torch.argmin(cost,axis=1),cost)
     
     
@@ -89,15 +92,23 @@ class HungarianMatcher():
         if verbose:
             print(cost[torch.arange(batch_size),idx])
             print(Counter(idx.cpu().detach().numpy()))
+            #print(target_dic['class'].to(torch.long))
 #             print(idx)
         bound_loss = self.bound_loss(output_dic['bbox'][np.arange(batch_size),idx],target_dic['bbox'].to(torch.float))
-        class_label = torch.ones(batch_size,num_queries).to(output_dic['bbox'].device)*(self.num_class-1)
-        class_label[torch.arange(batch_size),idx] = target_dic['class'].to(torch.float)
+        class_label = torch.ones(batch_size,num_queries).to(output_dic['bbox'].device)#*(self.num_class-1)
+        #print(class_label)
+        class_label[torch.arange(batch_size),idx] = torch.zeros((batch_size)).to(output_dic['bbox'].device)
+        #print(class_label,idx)
+        
+        
 #         if verbose:
-#             print(class_label[0],idx[0])
-        class_loss = self.class_loss(output_dic['class'].permute(0,2,1),class_label.to(torch.long))
+#             print(output_dic['class'][np.arange(batch_size),idx].size())
+        # self.class_loss(output_dic['class'].permute(0,2,1),class_label)#.to(torch.long))
+        class_loss = self.class_loss(output_dic['class'],class_label)#.to(torch.long))
+    
+        class_ort = self.class_loss_ort(output_dic['ort'][np.arange(batch_size),idx],target_dic['class'].to(torch.long))
         gen_loss = torch.stack([1 - generalized_box_iou(box_cxcywh_to_xyxy(output_dic['bbox'][num,idx[num]].unsqueeze(0)),
                                 box_cxcywh_to_xyxy(target_dic['bbox'][num].unsqueeze(0))) for num in range(batch_size)])
 
-        return class_loss + 5*bound_loss+ 2*gen_loss.mean()
+        return  5*bound_loss+ 2*gen_loss.mean()+1*class_ort +4*class_loss
         

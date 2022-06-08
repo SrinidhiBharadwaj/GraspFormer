@@ -67,7 +67,7 @@ class Decoder_head(nn.Module):
         bound = self.bound(x).sigmoid()
         classification = self.classification(x)
         orientation = self.orientation(x)
-        return (bound,classification)
+        return (bound,classification,orientation)
 
 class DETR(nn.Module):
     '''
@@ -75,7 +75,7 @@ class DETR(nn.Module):
     '''
     def __init__(self,encoder=None,key_model=None,decoder=None,
                 num_class=20,num_point=4,embed_dim=128,nhead=4,
-                numlayers=1,number_of_embed=16):
+                numlayers=1,number_of_embed=4):
         '''
         inputs:
             encoder_pre_model :encoder pretrained model 

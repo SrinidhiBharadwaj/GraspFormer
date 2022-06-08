@@ -132,7 +132,7 @@ class Trainer():
         self.loss_obj = loss_funtion
         self.optimizer = optimizer
        
-        self.save_every = 25 #Save the model every n epochs
+        self.save_every = 10 #Save the model every n epochs
 
     def train_network(self, orientation_only=False):
         print("Beginning training!!")
@@ -143,18 +143,20 @@ class Trainer():
 
                 x = x.to(torch.float32).to(self.device)
                 y_class,y_bb = y
+                #y_class=y_class*0
                 
                 #class_label = y[0].long().to(self.device)
                 bbox_label = y_bb.float().to(self.device)
                 #print(bbox_label)
                 
-                bbox_pred, class_pred = self.model(x)
+                bbox_pred, class_pred,orientation = self.model(x)
                 
+                class_pred = class_pred.squeeze(-1)
                 
                 #Learn orientation model weights regardless
                 target_dic = {'bbox':bbox_label,'class':y_class.to(torch.long).to(device)}
-                output_dic = {'bbox':bbox_pred,'class':class_pred}
-                if epoch%100==0:
+                output_dic = {'bbox':bbox_pred,'class':class_pred,'ort':orientation}
+                if epoch%20==0:
                     loss = self.loss_obj(target_dic,output_dic,verbose=True)
                 else:   
                     loss = self.loss_obj(target_dic,output_dic)
@@ -165,20 +167,22 @@ class Trainer():
             #print(f"Epoch: {epoch}, loss: {np.mean(running_orientation_loss)}")
             
             with torch.no_grad():
-                running_loss_val = []
+                running_loss_val = [0]
                 self.model.eval()
                 for i, (x_val, y_val) in enumerate(self.val_loader):
                     x_val = x_val.to(torch.float32).to(device)
                     
                     y_class_val,y_bb_val = y_val
+                    #y_class_val=y_class_val*0
                     bbox_label = y_bb_val.float().to(self.device)
 
-                    bbox_pred, class_pred = self.model(x_val)
+                    bbox_pred, class_pred,orientation = self.model(x_val)
+                    class_pred = class_pred.squeeze(-1)
                     target_dic = {'bbox':bbox_label,'class':y_class_val.to(torch.long).to(device)}
-                    output_dic = {'bbox':bbox_pred,'class':class_pred}
+                    output_dic = {'bbox':bbox_pred,'class':class_pred,'ort':orientation}
                     loss_val = self.loss_obj(target_dic,output_dic)
                     running_loss_val.append(loss_val.item())
-                    
+                self.model.train()
                 print("Epoch: {0}, Training loss: {1}, \
                                 Validation Loss: {2}".format(epoch,np.mean(running_orientation_loss),np.mean(running_loss_val)))
 
@@ -255,8 +259,8 @@ if __name__ == "__main__":
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Model will be trained on {device}!!")
-    num_class=21
-    model = DETR(num_class=num_class,number_of_embed=16).to(device) #19 + 1 background class for Cornell Dataset
+    num_class=1
+    model = DETR(num_class=num_class,number_of_embed=4).to(device) #19 + 1 background class for Cornell Dataset
     #checkpoint = torch.load('model_499.ckpt')
     # model.load_state_dict(checkpoint['model'])
 #     d= []
@@ -265,10 +269,10 @@ if __name__ == "__main__":
 #     d = torch.cat(d)
 #     print(torch.min(d),torch.max(d))
 #     print(Counter(d.numpy()))
-    
-    weight = torch.ones(num_class).to(device)*10
-    weight[num_class-1]=0.01
-    print(weight,weight.size())
+    weight=None
+#     weight = torch.ones(num_class).to(device)
+#     weight[num_class-1]=.2
+#     print(weight,weight.size())
     loss = HungarianMatcher(weight,num_class=num_class)
    
 
@@ -276,7 +280,7 @@ if __name__ == "__main__":
     lr =1e-4
     optim_bbox = optim.Adam(model.parameters(), lr=lr)
 
-    epochs = 500
+    epochs = 200
 
     train_model = Trainer(model, train_loader, val_loader, device, optim_bbox, loss.loss, epochs)
 
