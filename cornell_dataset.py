@@ -52,7 +52,7 @@ class CornellDataset(Dataset):
         gt_img_class = gt_img_rect[0]
         gt_img_box = gt_img_rect[1]
         
-        gt_img_class = np.sort(gt_img_class)
+        #gt_img_class = np.sort(gt_img_class)
         #If the image has only one class
         #print(gt_img_class.size)
         if (gt_img_class.size == 1):
@@ -61,12 +61,16 @@ class CornellDataset(Dataset):
 
         else:
             classes, count = np.unique(gt_img_class, return_counts=True)
+            #print(classes, count)
+        
             if (classes[0] == 0) and (np.around(count[0]/count.sum())>np.around(1./count.size)):
                 gt_class = gt_img_class[0]
                 gt_bbox = gt_img_box[0]
             else:
                 class_idx = np.argmax(count)
                 gt_class = classes[class_idx]
+               # print(gt_class)
+                
                 bbox_idx = np.where(gt_img_class == gt_class)[0]
                 gt_bbox = gt_img_box[bbox_idx[0]]
         
@@ -81,7 +85,7 @@ class CornellDataset(Dataset):
         gt_bbox = torch.tensor(gt_bbox)
         if gt_bbox.shape[0] == 1:
             gt_bbox = gt_bbox.squeeze(0)
-        gt_class_bbox = [torch.tensor(gt_class), torch.tensor(gt_bbox/224)]
+        gt_class_bbox = [torch.tensor(gt_class), (gt_bbox/224)]
 
         return img, gt_class_bbox
 
@@ -160,10 +164,10 @@ if __name__ == "__main__":
                             std=[1/0.229, 1/0.224, 1/0.225])
     #Image to tensor conversion is made implicit inside the class
     dataset = CornellDataset(dataset_path, img_set, transform=normalize)
-    img, gt_class_bbox = dataset.__getitem__(25)
+    img, gt_class_bbox = dataset.__getitem__(586)
     bbox = (gt_class_bbox[1]).numpy() * 224
     bbox = bbox.astype(np.uint8)
-    print(f"bbox: {bbox}")
+    print(f"class: {gt_class_bbox[0]}bbox: {bbox}")
     
     img = np.transpose(img,(1,2,0)).numpy().astype(np.uint8).copy() 
     cv2.rectangle(img, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0, 0, 255), 2)

@@ -29,7 +29,7 @@ class draw_bbox():
         rotated_box = R @ (points-center).T
         return rotated_box.T+center
 
-    def draw_rotated_box(self, image, plot=False):
+    def draw_rotated_box(self, image, plot=False, fig_num=0):
         
         points = np.array([[self.rect[0],self.rect[1]], 
                             [self.rect[2], self.rect[1]], 
@@ -57,8 +57,9 @@ class draw_bbox():
         plt.plot(pred_x[3:5],pred_y[3:5], color='r', alpha = 0.7, linewidth=3, solid_capstyle='round', zorder=2)
         
         plt.draw()
+        plt.savefig("Testfig_"+str(fig_num)+".png") 
         plt.show()
-        plt.savefig("Testfig.png")        
+               
 
 if __name__ == "__main__":
     dataset_path = "dataset/cornell"

@@ -31,9 +31,9 @@ class Keymodel(nn.Module):
     '''
     def __init__(self):
         super(Keymodel,self).__init__()
-        self.conv_1 = nn.Conv2d(2048,512,1)
+        self.conv_1 = nn.Conv2d(512,512,1)
         self.conv_2 = nn.Conv2d(512,64,1)
-        self.fc_encoder = nn.Linear(49,128)
+        self.fc_encoder = nn.Linear(49,32)
 
     def forward(self,encoder_output):
         bs = encoder_output.size(0)
@@ -73,8 +73,8 @@ class DETR(nn.Module):
     model class for detr class
     '''
     def __init__(self,encoder=None,key_model=None,decoder=None,
-                num_class=20,num_point=4,embed_dim=128,nhead=32,
-                numlayers=3,number_of_embed=16):
+                num_class=20,num_point=4,embed_dim=32,nhead=2,
+                numlayers=2,number_of_embed=4):
         '''
         inputs:
             encoder_pre_model :encoder pretrained model 
@@ -83,7 +83,7 @@ class DETR(nn.Module):
         self.encoder = encoder
         self.key_model = key_model
         if  self.encoder is None:
-            resnet = torchvision.models.resnet50(pretrained=True)
+            resnet = torchvision.models.resnet18(pretrained=True)
             self.encoder=torch.nn.Sequential(*(list(resnet.children())[:-2]))
             self.key_model = Keymodel()
 

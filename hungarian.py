@@ -43,9 +43,9 @@ class HungarianMatcher():
 
 
 class HungarianMatcherOverLoad():
-    def __init__(self, num_class):
+    def __init__(self, num_class, weight):
         self.bound_loss = torch.nn.SmoothL1Loss()
-        self.class_loss = torch.nn.CrossEntropyLoss()
+        self.class_loss = torch.nn.CrossEntropyLoss(weight)
         
         self.num_class = num_class
         
@@ -65,7 +65,7 @@ class HungarianMatcherOverLoad():
         idx = self.get_index(target_dic,output_dic) 
 
         bboxes_pred_per_batch =torch.zeros(batch_size, 4).to(device)
-        classes_pred_per_batch = torch.zeros(batch_size, 20).to(device)
+        classes_pred_per_batch = torch.zeros(batch_size, self.num_class).to(device)
         for i in range(len(idx)):
             bboxes_pred_per_batch[i, :] = output_dic['bbox'][i, idx[i], :]
             classes_pred_per_batch[i, :] = output_dic['class'][i, idx[i], :]
@@ -73,9 +73,13 @@ class HungarianMatcherOverLoad():
         bound_loss = self.bound_loss(bboxes_pred_per_batch,target_dic['bbox'].to(torch.float))
 
         class_label = target_dic['class']
-        class_loss = self.class_loss(classes_pred_per_batch,class_label.to(torch.long))
+        #print(class_label.shape, classes_pred_per_batch.shape)
         
-        return class_loss + bound_loss
+        class_loss = self.class_loss(classes_pred_per_batch,class_label.to(torch.long))
+
+        giou_loss = self.giou_loss(bboxes_pred_per_batch,target_dic['bbox'].to(torch.float))
+        #print(giou_loss)
+        return class_loss + 100*bound_loss, class_loss, 100*bound_loss
 
     def iou(self, box1,box2, eps=1e-7):
         '''
@@ -114,7 +118,7 @@ class HungarianMatcherOverLoad():
         max_box = torch.max(input_boxes, target_boxes)
         area_c = (max_box[:, 2] - min_box[:, 0]) * (max_box[:, 3] - min_box[:, 1])
 
-        giou = iou - ((area_c - union) / (area_c + eps))
+        giou = iou - ((area_c.clamp(min=0) - union) / (area_c))
 
         loss = 1 - giou
 

@@ -32,6 +32,7 @@ class Trainer():
         for epoch in range(self.epochs):
             running_val_loss = 0
             running_train_loss = 0
+            running_class_loss, running_box_loss = 0, 0
             model.train()
             for t, (x, y) in enumerate(self.train_loader):
                 x = x.to(self.device)
@@ -40,10 +41,10 @@ class Trainer():
                 bbox_label = y[1].float().to(self.device)
       
                 output = self.model(x)
-                # bbox_pred = output["pred_boxes"]
-                # class_pred = output["pred_logits"]
+                bbox_pred = output["pred_boxes"]
+                class_pred = output["pred_logits"]
          
-                bbox_pred, class_pred = self.model(x)
+                #bbox_pred, class_pred = self.model(x)
         
                 #Needs to be filled with loss for bbox matching(matching loss)
                 #Learn orientation model weights regardless
@@ -51,11 +52,14 @@ class Trainer():
                 target_dic = {'bbox':bbox_label, 'class':class_label}
                 output_dic = {'bbox':bbox_pred,'class':class_pred}
 
-                loss = self.loss_bbox(target_dic,output_dic, self.device)
+                loss, c_loss, b_loss = self.loss_bbox(target_dic,output_dic, self.device)
                 self.optimizer_bbox.zero_grad()
                 loss.backward()
                 self.optimizer_bbox.step()
                 running_train_loss += loss.item()
+                running_class_loss += c_loss.item()
+                running_box_loss +=  b_loss.item()
+
             self.scheduler.step(running_train_loss)
 
             with torch.no_grad():
@@ -67,23 +71,26 @@ class Trainer():
                     bbox_label = y[1].float().to(self.device)
                     
                     output = self.model(x)
-                    # bbox_pred = output["pred_boxes"]
-                    # class_pred = output["pred_logits"]
-                    bbox_pred, class_pred = self.model(x)
+                    bbox_pred = output["pred_boxes"]
+                    class_pred = output["pred_logits"]
+                    #bbox_pred, class_pred = self.model(x)
 
                     target_dic = {'bbox':bbox_label, 'class':class_label}
                     output_dic = {'bbox':bbox_pred,'class':class_pred}
 
-                    loss = self.loss_bbox(target_dic,output_dic, self.device)
-                    running_val_loss += loss.item() 
+                    loss, _, _ = self.loss_bbox(target_dic,output_dic, self.device)
+                    running_val_loss += loss.item()
+                    
 
             self.writer.add_scalar("Train Loss", running_train_loss/len(self.train_loader), epoch)
             self.writer.add_scalar("Val Loss", running_val_loss/len(self.val_loader), epoch)
-           
-            print(f"Epoch: {epoch}, Train Loss: {running_train_loss/len(self.train_loader)}, Val Loss: {running_val_loss/len(self.val_loader)}")
+            self.writer.add_scalar("Class Loss", running_class_loss/len(self.train_loader), epoch)
+            self.writer.add_scalar("Box Loss", running_box_loss/len(self.train_loader), epoch)
+            
+            print(f"Epoch: {epoch}, Class_loss: {running_class_loss/len(self.train_loader)}, Box Loss: {running_box_loss/len(self.train_loader)}, Total Loss: {running_train_loss/len(self.train_loader)}, Val Loss: {running_val_loss/len(self.val_loader)}")
             
             if (epoch+1) % self.save_every == 0:
-                save_name = os.path.join('model_{}.ckpt'.format(epoch+1))
+                save_name = os.path.join('models/model_{}.ckpt'.format(epoch+1))
                 torch.save({
                 'epoch': epoch+1,
                 'model': self.model.state_dict(), # 'model' should be 'model_state_dict'
@@ -106,16 +113,20 @@ if __name__ == "__main__":
     batch_size = 32
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
-
+    print(len(train_loader)*batch_size)
+    print(len(val_loader)*batch_size)
+    p
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Model will be trained on {device}!!")
 
     #model = detr_simplified(num_classes=20)
-    #model = DETRModel(num_classes=20, num_queries=4)
-    model = DETR(num_class=20)
+    model = DETRModel(num_classes=21, num_queries=2)
+    #model = DETR(num_class=20)
     #bbox parameters
-
-    loss_bbox = HungarianMatcherOverLoad(num_class=20)
+    
+    weight = 10 * torch.ones(21).to(device)
+    weight[20] = 0.1
+    loss_bbox = HungarianMatcherOverLoad(num_class=21, weight=weight)
     lr_bbox = 1e-4
     optim_bbox = optim.AdamW(model.parameters(), lr=lr_bbox)
     scheduler = lr_scheduler.ReduceLROnPlateau(optim_bbox, 'min', verbose=True)
