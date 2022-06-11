@@ -8,5 +8,5 @@ python trainer_vanilla_loss.py
 to train full detr model with iou loss
 python trainer.py
 
-infernce:
+Inference:
 inference_Grasp_model.ipynb
