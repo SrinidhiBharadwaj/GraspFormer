@@ -1,0 +1,10 @@
+/dataset/ocid/
+/__pycache__/
+/*.ckpt
+/detr/
+/overfit-checkpoints/
+/overfit-second/
+/overfit-third/
+/checkpoints/
+/runs/
+/models/
